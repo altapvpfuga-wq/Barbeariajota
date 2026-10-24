@@ -265,11 +265,6 @@ footer{padding:32px 0;color:var(--muted);font-size:14px;text-align:center}
 .floco{position:absolute;top:-34px;color:#cfe8ff;text-shadow:0 0 6px rgba(130,190,255,.55);
   animation:neveCair linear forwards;will-change:transform}
 @keyframes neveCair{to{transform:translate(var(--dx,0px),112vh) rotate(330deg)}}
-/* pisca-pisca de luzes natalinas */
-#luzNatal{position:fixed;left:0;right:0;top:calc(var(--topo-seguro,0px) + 64px);
-  display:flex;gap:9px;justify-content:center;pointer-events:none;z-index:119}
-#luzNatal i{width:8px;height:8px;border-radius:50%;display:block;animation:luzPisca 1.3s ease-in-out infinite}
-@keyframes luzPisca{0%,100%{opacity:1;box-shadow:0 0 8px 2px currentColor}50%{opacity:.25;box-shadow:none}}
 /* presente flutuante brilhando */
 #btnPresente{position:fixed;left:14px;bottom:16px;z-index:121;font-size:36px;line-height:1;
   background:transparent;border:none;padding:6px;cursor:pointer;

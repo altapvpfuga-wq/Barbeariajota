@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.21',
+  APP_VERSION: '1.0.23',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -916,9 +916,9 @@ const fechaAsLoja = () => statusLoja.ok ? (statusLoja.fechaAs || '21:00') : '21:
 
 // ============================================================
 //  NATAL — ligado pelo barbeiro no Painel (neve + presente)
-//  Muita animacao: neve em 2 camadas com deriva, luzes piscando
-//  no topo, emojis natalinos no ar, presente brilhando com
-//  faiscas e explosao de confete ao abrir.
+//  Muita animacao: neve em 2 camadas com deriva, emojis
+//  natalinos no ar, presente brilhando com faiscas e
+//  explosao de confete ao abrir.
 // ============================================================
 let neveTimer = null;
 let faiscaTimer = null;
@@ -941,23 +941,6 @@ function renderNatal() {
     if (neveTimer) { clearInterval(neveTimer); neveTimer = null; }
     layer.remove();
   }
-  // pisca-pisca de luzes natalinas embaixo do topo
-  let luz = document.getElementById('luzNatal');
-  if (statusLoja.neve) {
-    if (!luz) {
-      luz = document.createElement('div');
-      luz.id = 'luzNatal';
-      const cores = ['#EF4444', '#22C55E', '#C9A227', '#3B82F6', '#A855F7', '#F97316'];
-      for (let i = 0; i < 22; i++) {
-        const d = document.createElement('i');
-        d.style.background = cores[i % cores.length];
-        d.style.animationDelay = (i * 0.09).toFixed(2) + 's';
-        luz.appendChild(d);
-      }
-      document.body.appendChild(luz);
-    }
-  } else if (luz) luz.remove();
-
   // ---------- PRESENTE flutuante (brilha e solta faiscas) ----------
   let gift = document.getElementById('btnPresente');
   if (statusLoja.presente) {

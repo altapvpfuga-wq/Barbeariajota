@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.21',
+  APP_VERSION: '1.0.23',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -259,9 +259,11 @@ function cardAg(b) {
   const btnPago = (b.payMethod === 'pix' && b.pixStatus !== 'pago')
     ? `<button class="btn-pago" data-id="${esc(b.id)}">✅ Marcar sinal pago</button>` : '';
   // editar e excluir: muda na hora no app/site do cliente
+  // IMPORTANTE: as classes btn-editar/btn-apagar TEM que bater com o
+  // addEventListener lá embaixo — é o que faz o toque funcionar no APK.
   const mini = `<div class="mini-acoes">
-      <button class="btn-mini" data-id="${esc(b.id)}" title="Editar agendamento">✏️ Editar</button>
-      <button class="btn-mini perigo" data-id="${esc(b.id)}" title="Excluir agendamento">🗑️ Excluir</button>
+      <button class="btn-mini btn-editar" data-id="${esc(b.id)}" title="Editar agendamento">✏️ Editar</button>
+      <button class="btn-mini btn-apagar perigo" data-id="${esc(b.id)}" title="Excluir agendamento">🗑️ Excluir</button>
     </div>`;
   return `<div class="ag">
     <div class="ag-hora">${esc(b.time) || '--:--'}</div>
@@ -378,13 +380,19 @@ async function confirmarPixSinal(id) {
 }
 
 // clicou em algum botao do cartao? (delegacao: funciona em toda a lista)
+// acha o botao pela CLASSE ou pelo TEXTO — assim nunca mais fica "mudo"
 $('listaAg').addEventListener('click', (e) => {
-  const btnPago = e.target.closest('.btn-pago');
-  if (btnPago) { e.preventDefault(); confirmarPixSinal(btnPago.dataset.id); return; }
-  const btnEd = e.target.closest('.btn-editar');
-  if (btnEd) { e.preventDefault(); abrirEditar(btnEd.dataset.id); return; }
-  const btnAp = e.target.closest('.btn-apagar');
-  if (btnAp) { e.preventDefault(); pedirExcluirAgendamento(btnAp.dataset.id); }
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const id = btn.dataset ? btn.dataset.id : null;
+  if (!id) return;
+  const ehEditar = btn.classList.contains('btn-editar')
+    || (btn.classList.contains('btn-mini') && /editar/i.test(btn.textContent || ''));
+  const ehApagar = btn.classList.contains('btn-apagar')
+    || (btn.classList.contains('btn-mini') && /excluir/i.test(btn.textContent || ''));
+  if (btn.classList.contains('btn-pago')) { e.preventDefault(); confirmarPixSinal(id); return; }
+  if (ehEditar) { e.preventDefault(); abrirEditar(id); return; }
+  if (ehApagar) { e.preventDefault(); pedirExcluirAgendamento(id); }
 });
 
 // ============================================================
