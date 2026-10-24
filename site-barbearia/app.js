@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.18',
+  APP_VERSION: '1.0.19',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -650,7 +650,17 @@ function baixarEInstalar(url) {
 
   const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
   if (!nativo) {
-    // sem o plugin (navegador): baixa o APK direto, sem ir para pagina do GitHub
+    // iPhone/iPad: o app e o proprio site — atualizar e recarregar a pagina
+    const ehIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ehIOS) {
+      $('updNotas').textContent = 'No iPhone a atualização é instantânea: toque aí embaixo e a página recarrega na versão nova.';
+      $('btnAtualizar').textContent = '🔄 Recarregar com a versão nova';
+      $('btnAtualizar').disabled = false;
+      $('btnAtualizar').onclick = () => location.reload();
+      return;
+    }
+    // navegador no Android/PC: baixa o APK direto, sem ir para pagina do GitHub
     const a = document.createElement('a');
     a.href = url;
     document.body.appendChild(a);
@@ -824,15 +834,25 @@ async function processarCanal(texto) {
           pixBooking = { ...pixBooking, ...p.b };
           renderPixArea();
         }
+        // se ainda esta na fila de envio, atualiza la tambem
+        try {
+          const fila = JSON.parse(localStorage.getItem(LS_SYNC) || '{}');
+          if (fila[p.b.id]) { fila[p.b.id] = { ...fila[p.b.id], ...p.b }; localStorage.setItem(LS_SYNC, JSON.stringify(fila)); }
+        } catch { /* ignora */ }
         renderAll();
         toast('✏️ A barbearia atualizou seu agendamento.');
       }
     } else if (p && p.t === 'd' && p.b && p.b.id) {
-      // a barbearia EXCLUIU o agendamento: some daqui na hora
+      // a barbearia EXCLUIU o agendamento: some daqui na hora (e da fila de envio,
+      // para nao voltar sozinho depois)
       const atual = loadBookings().find((b) => b.id === p.b.id);
+      saveBookings(loadBookings().filter((b) => b.id !== p.b.id));
+      if (pixBooking && pixBooking.id === p.b.id) pixBooking = null;
+      try {
+        const fila = JSON.parse(localStorage.getItem(LS_SYNC) || '{}');
+        if (fila[p.b.id]) { delete fila[p.b.id]; localStorage.setItem(LS_SYNC, JSON.stringify(fila)); }
+      } catch { /* ignora */ }
       if (atual) {
-        saveBookings(loadBookings().filter((b) => b.id !== p.b.id));
-        if (pixBooking && pixBooking.id === p.b.id) pixBooking = null;
         renderAll();
         toast('🗑️ Sua reserva foi cancelada pela barbearia. Fale no WhatsApp se tiver dúvida.');
       }
@@ -1350,7 +1370,12 @@ async function renderToday() {
     return;
   }
 
-  const futuras = TIME_SLOTS.filter((t) => slotMinutesOf(t) > mins);
+  // horarios de hoje: so os que ainda vao acontecer E que estao dentro
+  // do horario de funcionamento definido no Painel
+  const futuras = TIME_SLOTS.filter((t) => {
+    const m = slotMinutesOf(t);
+    return m > mins && m >= abreM && m <= fechaM;
+  });
   if (!futuras.length) {
     box.innerHTML = '<span class="closed-big">🔴 Encerrado</span><p class="tiny">Sem mais vagas hoje</p>';
     return;

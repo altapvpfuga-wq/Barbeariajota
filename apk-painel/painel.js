@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.18',
+  APP_VERSION: '1.0.19',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -436,10 +436,12 @@ $('btnSalvarEditar').onclick = async () => {
   };
   const preco = Number($('ePreco').value);
   if (preco > 0) patch.price = preco;
-  registrar({ id: idAlvo, ...patch }, { avisaNovo: false });
+  // manda o agendamento INTEIRO com as mudanças por cima (assim o merge
+  // do registrar nunca descarta a edição por causa do createdAt antigo)
+  registrar({ ...lerLocais()[idAlvo], ...patch }, { avisaNovo: false });
   pintarLista();
-  // avisa o APP/SITE do cliente — muda na hora
-  publicarCanal({ t: 'e', b: { id: idAlvo, ...patch } });
+  // avisa o APP/SITE do cliente — muda na hora (vai completo, com dia/hora)
+  publicarCanal({ t: 'e', b: { ...lerLocais()[idAlvo], ...patch } });
   toast('✏️ Agendamento atualizado! O cliente já vê a mudança.');
   $('modalEditar').classList.add('hidden');
   editandoId = null;
