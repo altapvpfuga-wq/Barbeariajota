@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.20',
+  APP_VERSION: '1.0.21',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -178,6 +178,7 @@ function salvarLocais(obj) {
 // registra/agrupa um agendamento que chegou
 function registrar(b, { avisaNovo = true } = {}) {
   if (!b || !b.id || typeof b.id !== 'string') return 'nao';
+  if (foiApagado(b.id)) return 'ignorado';   // foi excluido de proposito: nao volta
   const loc = lerLocais();
   const atual = loc[b.id];
   let novo = false;
@@ -383,7 +384,7 @@ $('listaAg').addEventListener('click', (e) => {
   const btnEd = e.target.closest('.btn-editar');
   if (btnEd) { e.preventDefault(); abrirEditar(btnEd.dataset.id); return; }
   const btnAp = e.target.closest('.btn-apagar');
-  if (btnAp) { e.preventDefault(); excluirAgendamento(btnAp.dataset.id); }
+  if (btnAp) { e.preventDefault(); pedirExcluirAgendamento(btnAp.dataset.id); }
 });
 
 // ============================================================
@@ -455,10 +456,53 @@ $('btnSalvarEditar').onclick = async () => {
   } catch { /* PC desligado — o aviso pela internet ja saiu */ }
 };
 
+// ---------- controle de exclusão ----------
+// a confirmacao NAO usa confirm() do navegador: o Android do APK
+// nao mostra essa caixinha e a exclusao seria cancelada sozinha.
+let apagandoId = null;
+
+// "lapide": id apagado nao volta por 3 dias — nem pelo PC, nem pelo
+// historico do canal (que guarda 12 horas de mensagens)
+const LS_APAGADOS = 'painel_apagados_v1';
+function lerApagados() {
+  try { return JSON.parse(localStorage.getItem(LS_APAGADOS) || '{}'); } catch { return {}; }
+}
+function marcarApagado(id) {
+  try {
+    const m = lerApagados();
+    const agora = Date.now();
+    for (const k of Object.keys(m)) if (agora - m[k] > 3 * 24 * 60 * 60 * 1000) delete m[k];
+    m[id] = agora;
+    localStorage.setItem(LS_APAGADOS, JSON.stringify(m));
+  } catch { /* ignora */ }
+}
+function foiApagado(id) {
+  const m = lerApagados();
+  return !!(m[id] && Date.now() - m[id] < 3 * 24 * 60 * 60 * 1000);
+}
+
+// abre a caixinha de confirmacao do proprio app
+function pedirExcluirAgendamento(id) {
+  const b = lerLocais()[id];
+  if (!b) { toast('Agendamento não encontrado.'); return; }
+  apagandoId = id;
+  $('excluirTexto').textContent =
+    `Excluir o agendamento de ${b.clientName || '?'} — ${b.time || ''} ${b.dateLabel || ''}?`
+    + ' Ele some do aplicativo e do site do cliente na hora.';
+  $('modalExcluir').classList.remove('hidden');
+}
+$('btnCancelarExcluir').onclick = () => { apagandoId = null; $('modalExcluir').classList.add('hidden'); };
+$('btnConfirmarExcluir').onclick = async () => {
+  const id = apagandoId;
+  apagandoId = null;
+  $('modalExcluir').classList.add('hidden');
+  if (id) await excluirAgendamento(id);
+};
+
 async function excluirAgendamento(id) {
   const b = lerLocais()[id];
-  if (!b) return;
-  if (!confirm(`Excluir o agendamento de ${b.clientName || '?'} — ${b.time || ''} ${b.dateLabel || ''}?`)) return;
+  if (!b) { toast('Agendamento não encontrado.'); return; }
+  marcarApagado(id);      // nao deixa voltar de jeito nenhum
   removerLocal(id, { avisa: false });
   // avisa o APP/SITE do cliente — some na hora
   publicarCanal({ t: 'd', b: { id } });
@@ -664,7 +708,7 @@ async function pegarAtrasados() {
         registrar(p.b, { avisaNovo: fresco });
       } else if (p.t === 'p' && p.b) registrar(p.b, { avisaNovo: false });
       else if (p.t === 'e' && p.b && p.b.id) registrar(p.b, { avisaNovo: false });
-      else if (p.t === 'd' && p.b && p.b.id) removerLocal(p.b.id, { avisa: false });
+      else if (p.t === 'd' && p.b && p.b.id) { removerLocal(p.b.id, { avisa: false }); marcarApagado(p.b.id); }
       else if (p.t === 's' && p.s && Number(p.s.ts || 0) > Number(statusLoja.ts || 0)) {
         statusLoja = p.s;
         try { localStorage.setItem(LS_ST, JSON.stringify(statusLoja)); } catch { /* ignora */ }
