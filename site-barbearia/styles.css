@@ -262,11 +262,26 @@ footer{padding:32px 0;color:var(--muted);font-size:14px;text-align:center}
 
 /* ===== Natal (ligado pelo barbeiro no Painel) ===== */
 #neveLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:120}
-.floco{position:absolute;top:-26px;color:#cfe8ff;text-shadow:0 0 6px rgba(130,190,255,.55);
+.floco{position:absolute;top:-34px;color:#cfe8ff;text-shadow:0 0 6px rgba(130,190,255,.55);
   animation:neveCair linear forwards;will-change:transform}
-@keyframes neveCair{to{transform:translateY(110vh) rotate(360deg)}}
+@keyframes neveCair{to{transform:translate(var(--dx,0px),112vh) rotate(330deg)}}
+/* pisca-pisca de luzes natalinas */
+#luzNatal{position:fixed;left:0;right:0;top:calc(var(--topo-seguro,0px) + 64px);
+  display:flex;gap:9px;justify-content:center;pointer-events:none;z-index:119}
+#luzNatal i{width:8px;height:8px;border-radius:50%;display:block;animation:luzPisca 1.3s ease-in-out infinite}
+@keyframes luzPisca{0%,100%{opacity:1;box-shadow:0 0 8px 2px currentColor}50%{opacity:.25;box-shadow:none}}
+/* presente flutuante brilhando */
 #btnPresente{position:fixed;left:14px;bottom:16px;z-index:121;font-size:36px;line-height:1;
   background:transparent;border:none;padding:6px;cursor:pointer;
-  filter:drop-shadow(0 3px 8px rgba(0,0,0,.55));animation:presenteBalanca 1.8s ease-in-out infinite}
+  animation:presenteBalanca 1.8s ease-in-out infinite,presenteBrilho 2.2s ease-in-out infinite}
 @keyframes presenteBalanca{0%,100%{transform:rotate(-9deg)}50%{transform:rotate(9deg)}}
-#modalNatal .modal-card{max-width:340px}
+@keyframes presenteBrilho{0%,100%{filter:drop-shadow(0 0 5px rgba(255,215,0,.9))}50%{filter:drop-shadow(0 0 18px rgba(255,110,110,.95))}}
+/* faiscas que sobem do presente */
+.faisca{position:fixed;pointer-events:none;z-index:122;animation:faiscaSobe 1.4s ease-out forwards}
+@keyframes faiscaSobe{to{transform:translateY(-84px) rotate(200deg);opacity:0}}
+/* confete da explosao */
+.confete{position:fixed;width:8px;height:8px;pointer-events:none;z-index:130;border-radius:2px;
+  animation:confeteVoar 1s ease-out forwards;will-change:transform,opacity}
+@keyframes confeteVoar{from{transform:translate(0,0) rotate(0);opacity:1}
+  to{transform:translate(var(--dx,0),var(--dy,80px)) rotate(var(--rot,360deg));opacity:0}}
+#modalNatal .modal-card{max-width:340px;border-top:4px solid var(--green);border-bottom:4px solid var(--red)}

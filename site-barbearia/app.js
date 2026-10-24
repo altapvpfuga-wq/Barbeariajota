@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.19',
+  APP_VERSION: '1.0.20',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -916,36 +916,49 @@ const fechaAsLoja = () => statusLoja.ok ? (statusLoja.fechaAs || '21:00') : '21:
 
 // ============================================================
 //  NATAL — ligado pelo barbeiro no Painel (neve + presente)
+//  Muita animacao: neve em 2 camadas com deriva, luzes piscando
+//  no topo, emojis natalinos no ar, presente brilhando com
+//  faiscas e explosao de confete ao abrir.
 // ============================================================
 let neveTimer = null;
+let faiscaTimer = null;
+
+const NATAL_EMOJIS = ['🎁', '🎄', '✂️', '🎅', '⭐', '🤶', '🔔', '❄️', '🦌', '🍬', '🕯️', '🌟'];
+
 function renderNatal() {
-  // --- neve caindo na tela toda ---
+  // ---------- NEVE + LUZES (a neve cai na tela toda) ----------
   let layer = document.getElementById('neveLayer');
   if (statusLoja.neve) {
     if (!layer) {
       layer = document.createElement('div');
       layer.id = 'neveLayer';
       document.body.appendChild(layer);
-      neveTimer = setInterval(() => {
-        const onde = document.getElementById('neveLayer');
-        if (!onde) return;
-        if (onde.childElementCount > 40) return;   // nao enche a memoria
-        const f = document.createElement('span');
-        f.className = 'floco';
-        f.textContent = Math.random() < 0.15 ? '❅' : '❄';
-        f.style.left = (Math.random() * 100) + 'vw';
-        f.style.animationDuration = (5 + Math.random() * 7) + 's';
-        f.style.fontSize = (10 + Math.random() * 16) + 'px';
-        f.style.opacity = (0.45 + Math.random() * 0.55).toFixed(2);
-        onde.appendChild(f);
-        setTimeout(() => f.remove(), 13000);
-      }, 380);
+      // chuva inicial para a tela já nascer natalina
+      for (let i = 0; i < 14; i++) setTimeout(nevar, i * 90);
+      neveTimer = setInterval(nevar, 240);
     }
   } else if (layer) {
     if (neveTimer) { clearInterval(neveTimer); neveTimer = null; }
     layer.remove();
   }
-  // --- presente de natal (flutuante) ---
+  // pisca-pisca de luzes natalinas embaixo do topo
+  let luz = document.getElementById('luzNatal');
+  if (statusLoja.neve) {
+    if (!luz) {
+      luz = document.createElement('div');
+      luz.id = 'luzNatal';
+      const cores = ['#EF4444', '#22C55E', '#C9A227', '#3B82F6', '#A855F7', '#F97316'];
+      for (let i = 0; i < 22; i++) {
+        const d = document.createElement('i');
+        d.style.background = cores[i % cores.length];
+        d.style.animationDelay = (i * 0.09).toFixed(2) + 's';
+        luz.appendChild(d);
+      }
+      document.body.appendChild(luz);
+    }
+  } else if (luz) luz.remove();
+
+  // ---------- PRESENTE flutuante (brilha e solta faiscas) ----------
   let gift = document.getElementById('btnPresente');
   if (statusLoja.presente) {
     if (!gift) {
@@ -956,12 +969,81 @@ function renderNatal() {
       gift.textContent = '🎁';
       gift.onclick = abrirPresente;
       document.body.appendChild(gift);
+      faiscaTimer = setInterval(faiscar, 750);
     }
-  } else if (gift) gift.remove();
+  } else {
+    if (gift) gift.remove();
+    if (faiscaTimer) { clearInterval(faiscaTimer); faiscaTimer = null; }
+  }
+}
+
+// um floco/emoji novo caindo (com profundidade: longe = menor, lento e borrado)
+function nevar() {
+  const onde = document.getElementById('neveLayer');
+  if (!onde) return;
+  if (onde.childElementCount > 60) return;
+  const depth = Math.random();
+  const sorte = Math.random();
+  let ch, base;
+  if (sorte < 0.58) { ch = '❄'; base = 9; }
+  else if (sorte < 0.70) { ch = '❅'; base = 9; }
+  else if (sorte < 0.78) { ch = '🎄'; base = 15; }
+  else if (sorte < 0.85) { ch = '⭐'; base = 12; }
+  else if (sorte < 0.91) { ch = '🔔'; base = 12; }
+  else if (sorte < 0.96) { ch = '🎅'; base = 14; }
+  else { ch = '✨'; base = 12; }
+  const f = document.createElement('span');
+  f.className = 'floco';
+  f.textContent = ch;
+  f.style.left = (Math.random() * 100) + 'vw';
+  f.style.fontSize = Math.round(base + depth * 16) + 'px';
+  f.style.opacity = (0.4 + Math.random() * 0.6).toFixed(2);
+  f.style.setProperty('--dx', Math.round((Math.random() - 0.5) * 130) + 'px');
+  const dur = 6 + (1 - depth) * 8;   // longe = mais lento
+  f.style.animationDuration = dur.toFixed(2) + 's';
+  if (depth < 0.28) f.style.filter = 'blur(1.5px)';
+  onde.appendChild(f);
+  setTimeout(() => f.remove(), (dur + 1) * 1000);
+}
+
+// faísca subindo do presente
+function faiscar() {
+  const gift = document.getElementById('btnPresente');
+  if (!gift) return;
+  const s = document.createElement('span');
+  s.className = 'faisca';
+  s.textContent = Math.random() < 0.7 ? '✨' : '⭐';
+  s.style.left = (8 + Math.random() * 58) + 'px';
+  s.style.bottom = (46 + Math.random() * 42) + 'px';
+  s.style.fontSize = (10 + Math.random() * 10) + 'px';
+  document.body.appendChild(s);
+  setTimeout(() => s.remove(), 1500);
+}
+
+// explosao de confete a partir de um ponto da tela
+function explodirConfete(x, y) {
+  const cores = ['#EF4444', '#22C55E', '#C9A227', '#3B82F6', '#A855F7', '#F97316', '#F5F5F5'];
+  for (let i = 0; i < 30; i++) {
+    const c = document.createElement('span');
+    c.className = 'confete';
+    c.style.left = x + 'px';
+    c.style.top = y + 'px';
+    c.style.background = cores[i % cores.length];
+    c.style.setProperty('--dx', Math.round((Math.random() - 0.5) * 280) + 'px');
+    const sobe = Math.random() < 0.35;
+    c.style.setProperty('--dy', Math.round((Math.random() * 170 + 50) * (sobe ? -1 : 1)) + 'px');
+    c.style.setProperty('--rot', Math.round(Math.random() * 720 - 360) + 'deg');
+    if (Math.random() < 0.4) c.style.borderRadius = '50%';
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 1150);
+  }
 }
 
 function abrirPresente() {
   if (document.getElementById('modalNatal')) return;
+  // confete na hora em que abre
+  const r = (document.getElementById('btnPresente') || document.body).getBoundingClientRect();
+  explodirConfete(r.left + 24, r.top + 24);
   const fundo = document.createElement('div');
   fundo.id = 'modalNatal';
   fundo.className = 'modal';
@@ -973,10 +1055,14 @@ function abrirPresente() {
       <button id="btnFecharNatal" class="btn btn-gold btn-block" style="margin-top:14px">🎄 Fechar</button>
     </div>`;
   document.body.appendChild(fundo);
+  // confete também de cima da caixinha do modal
+  setTimeout(() => {
+    const m = fundo.querySelector('.modal-card');
+    if (m) { const mr = m.getBoundingClientRect(); explodirConfete(mr.left + mr.width / 2, mr.top + 30); }
+  }, 120);
   const emoji = fundo.querySelector('#presenteEmoji');
-  const presentes = ['🎁', '🎄', '✂️', '🎅', '⭐'];
   let i = 0;
-  const troca = setInterval(() => { emoji.textContent = presentes[i = (i + 1) % presentes.length]; }, 700);
+  const troca = setInterval(() => { emoji.textContent = NATAL_EMOJIS[i = (i + 1) % NATAL_EMOJIS.length]; }, 550);
   fundo.querySelector('#btnFecharNatal').onclick = () => { clearInterval(troca); fundo.remove(); };
 }
 

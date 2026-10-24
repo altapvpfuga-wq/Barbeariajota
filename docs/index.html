@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Barbearia do Jota — Apps</title>
+<meta name="theme-color" content="#C9A227" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<style>
+  :root{--bg:#111114;--card:#1C1C21;--border:#2A2A32;--text:#F5F5F5;--muted:#A1A1AA;--gold:#C9A227;--green:#22C55E}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .caixa{max-width:430px;width:100%}
+  .topo{text-align:center;margin-bottom:22px}
+  .topo img{height:64px;border-radius:12px;background:#fff;padding:4px}
+  h1{font-size:22px;margin:12px 0 4px}
+  .topo p{color:var(--muted);font-size:13px;margin:0}
+  .app{display:block;background:var(--card);border:1px solid var(--border);border-radius:16px;
+    padding:18px;margin:12px 0;text-decoration:none;color:var(--text);transition:border-color .15s}
+  .app:active{border-color:var(--gold)}
+  .app .linha{display:flex;align-items:center;gap:14px}
+  .app .ico{font-size:34px}
+  .app b{display:block;font-size:16px}
+  .app small{color:var(--muted);font-size:12px;display:block;margin-top:3px}
+  .app .seta{margin-left:auto;color:var(--gold);font-size:20px}
+  .app.painel:hover,.app.painel:active{border-color:var(--green)}
+  .como{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 18px;margin-top:18px}
+  .como h2{font-size:14px;margin:0 0 8px;color:var(--gold)}
+  .como ol{margin:0;padding-left:20px;color:var(--muted);font-size:13px;line-height:1.9}
+  .rodape{text-align:center;color:var(--muted);font-size:11px;margin-top:18px}
+</style>
+</head>
+<body>
+  <div class="caixa">
+    <div class="topo">
+      <img src="app/logo.svg" alt="logo" />
+      <h1>Barbearia do Jota</h1>
+      <p>Rua Javata, 1506 - Anchieta · Ter–Dom · 09h às 21h</p>
+    </div>
+
+    <a class="app" href="app/">
+      <div class="linha">
+        <span class="ico">💈</span>
+        <span><b>App do Cliente</b><small>Agendar corte, pagar o sinal por Pix e falar no WhatsApp</small></span>
+        <span class="seta">→</span>
+      </div>
+    </a>
+
+    <a class="app painel" href="painel/">
+      <div class="linha">
+        <span class="ico">🧑‍💼</span>
+        <span><b>Painel do Barbeiro</b><small>Ver agendamentos, abrir/fechar a loja e confirmar o Pix (precisa do PIN)</small></span>
+        <span class="seta">→</span>
+      </div>
+    </a>
+
+    <div class="como">
+      <h2>📲 Como instalar no iPhone (vira um app de verdade)</h2>
+      <ol>
+        <li>Abra o app que você quer na lista acima (Safari)</li>
+        <li>Toque no botão <b>Compartilhar</b> (o quadradinho com a seta ↑)</li>
+        <li>Escolha <b>“Adicionar à Tela de Início”</b></li>
+        <li>Toque em <b>Adicionar</b> — pronto! O ícone com a logo aparece na tela</li>
+      </ol>
+      <p style="color:var(--muted);font-size:12px;margin:10px 0 0">No Android, use o APK que o pessoal da barbearia manda. No iPhone, este é o app oficial.</p>
+    </div>
+
+    <p class="rodape">Feito com carinho para a Barbearia do Jota ✂️</p>
+  </div>
+</body>
+</html>
