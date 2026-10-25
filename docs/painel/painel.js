@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.35',
+  APP_VERSION: '1.0.36',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -127,8 +127,8 @@ function pintarStatus() {
     aviso.textContent = texto;
   }
   if ($('mAuto')) $('mAuto').classList.toggle('on', statusLoja.modo !== 'manual');
-  if ($('mAberto')) $('mAberto').classList.toggle('on', statusLoja.modo === 'manual' && statusLoja.aberto !== false);
-  if ($('mFechado')) $('mFechado').classList.toggle('on', statusLoja.modo === 'manual' && statusLoja.aberto === false);
+  if ($('mAberto')) $('mAberto').classList.toggle('on', statusLoja.modo === 'manual' && statusLoja.aberto === true);
+  if ($('mFechado')) $('mFechado').classList.toggle('on', statusLoja.modo === 'manual' && statusLoja.aberto !== true);
   if ($('inpAbre') && statusLoja.abreAs) $('inpAbre').value = statusLoja.abreAs;
   if ($('inpFecha') && statusLoja.fechaAs) $('inpFecha').value = statusLoja.fechaAs;
   pintarNatal();
@@ -151,7 +151,14 @@ async function mandarStatus(corpo) {
     await chamarApi('/api/painel/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: pinAtual(), ...corpo }),
+      // manda o status COMPLETO para o PC nao republicar um estado antigo
+      body: JSON.stringify({
+        pin: pinAtual(),
+        modo: statusLoja.modo,
+        aberto: statusLoja.aberto,
+        abreAs: statusLoja.abreAs,
+        fechaAs: statusLoja.fechaAs,
+      }),
     });
     toast('✅ Salvo! O site já atualizou.');
   } catch {
@@ -339,9 +346,9 @@ function ligarCanal() {
       canalOk = true;
       const aviso = $('stAviso');
       // ao abrir o canal, avisa os clientes "sou eu, o status atual e este"
-      if (!anunciouStatus) {
+      if (!anunciouStatus && statusLoja.ts) {
         anunciouStatus = true;
-        setTimeout(() => publicarCanal({ t: 's', s: { ...statusLoja, ts: statusLoja.ts || Date.now() } }), 900);
+        setTimeout(() => publicarCanal({ t: 's', s: statusLoja }), 900);
       }
       if (aviso && !aviso.textContent) pintarStatus();
     };
@@ -749,7 +756,14 @@ async function ligarNatal(campo, valor) {
     await chamarApi('/api/painel/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: pinAtual(), [campo]: valor }),
+      body: JSON.stringify({
+        pin: pinAtual(),
+        modo: statusLoja.modo,
+        aberto: statusLoja.aberto,
+        abreAs: statusLoja.abreAs,
+        fechaAs: statusLoja.fechaAs,
+        [campo]: valor,
+      }),
     });
   } catch { /* PC desligado — o aviso pela internet ja saiu */ }
 }
@@ -773,7 +787,7 @@ window.addEventListener('load', () => {
       pintarLista();
       atualizarPainel();
       // reavisa os clientes do status atual (cobre desconexoes longas)
-      publicarCanal({ t: 's', s: { ...statusLoja, ts: statusLoja.ts || Date.now() } });
+      if (statusLoja.ts) publicarCanal({ t: 's', s: statusLoja });
     }
   });
   document.title = 'Painel — ' + CONFIG.BARBER_NAME;

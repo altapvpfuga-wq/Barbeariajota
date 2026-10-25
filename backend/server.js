@@ -86,7 +86,7 @@ function savePainel(d) {
 // diz se esta aberto agora, pelo statusdo painel
 function calcularAberto(st) {
   if (!st) return false;
-  if (st.modo === 'manual') return st.aberto !== false; // quando forcado, vale a palavra do barbeiro
+  if (st.modo === 'manual') return st.aberto === true; // so true = aberto (null/undefined/false = fechado)
   const now = new Date();
   const mins = now.getHours() * 60 + now.getMinutes();
   return mins >= minutosDe(st.abreAs) && mins <= minutosDe(st.fechaAs);
@@ -263,7 +263,7 @@ app.post('/api/painel/status', (req, res) => {
     t: 's',
     s: {
       modo: p.status.modo,
-      aberto: p.status.modo === 'manual' ? (p.status.aberto !== false) : null,
+      aberto: p.status.modo === 'manual' ? (p.status.aberto === true) : null,
       abreAs: p.status.abreAs,
       fechaAs: p.status.fechaAs,
       neve: !!p.status.neve,
