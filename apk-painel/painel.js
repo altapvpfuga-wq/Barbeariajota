@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.32',
+  APP_VERSION: '1.0.33',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -101,7 +101,7 @@ let statusLoja = statusIniciado();
 // esta aberto AGORA? (manual vale a palavra do barbeiro; auto vale o horario)
 function calcularAbertoAgora(st) {
   if (!st) return false;
-  if (st.modo === 'manual') return st.aberto !== false;
+  if (st.modo === 'manual') return st.aberto === true;   // só true = aberto (null/undefined/false = fechado)
   const agora = new Date();
   if (agora.getDay() === 1) return false; // segunda fechado
   const mins = agora.getHours() * 60 + agora.getMinutes();

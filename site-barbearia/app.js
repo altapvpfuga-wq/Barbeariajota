@@ -1,27 +1,27 @@
-// ===== CONFIG CENTRAL — edite aqui =====
+// ===== CONFIG CENTRAL â€” edite aqui =====
 const CONFIG = {
-  // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.32',
+  // VersÃ£o do aplicativo. Aumente este nÃºmero toda vez que publicar um APK novo.
+  APP_VERSION: '1.0.33',
 
-  // Repositório do GitHub onde os APK são publicados.
-  // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
+  // RepositÃ³rio do GitHub onde os APK sÃ£o publicados.
+  // Precisa ser PUBLICO, senÃ£o o aplicativo nÃ£o consegue ler as versÃµes.
   GITHUB_USER: 'Surtadoo',
   GITHUB_REPO: 'barbearia-do-jota',
 
   BARBER_NAME: 'Barbearia do Jota',
   BARBER_ADDRESS: 'Rua Javata, 1506 - Anchieta',
-  BARBER_WHATSAPP: '5521980204832', // +55 21 98020-4832 (só dígitos)
+  BARBER_WHATSAPP: '5521980204832', // +55 21 98020-4832 (sÃ³ dÃ­gitos)
 
-  // Endereço do servidor que confere o Pix.
+  // EndereÃ§o do servidor que confere o Pix.
   // No computador: http://localhost:3001
   // No celular / APK: troque localhost pelo IP do PC na mesma rede (ex.: http://192.168.1.73:3001)
-  // Se publicar o backend na internet, cole aqui o endereço https://... e apague os de baixo.
+  // Se publicar o backend na internet, cole aqui o endereÃ§o https://... e apague os de baixo.
   API_BASES: [
     'http://localhost:3001',
     'http://192.168.1.73:3001',
   ],
   SIGNAL_VALUE: 10.00,
-  // Chave Pix cadastrada na InfinitePay (chave aleatória)
+  // Chave Pix cadastrada na InfinitePay (chave aleatÃ³ria)
   PIX_KEY: 'c02767e5-8d53-44d2-a93f-ff3534b1b4ce',
 
   // Link fixo de pagamento do sinal. O site NAO cria cobranca nova:
@@ -33,29 +33,29 @@ const CONFIG = {
   // (ntfy, gratis). TEM que ser o MESMO nome no apk-painel/painel.js.
   NTFY_URL: 'https://ntfy.sh',
   NTFY_TOPIC: 'bjota-ag-7k2m9xI',
-  ABOUT: 'Na Barbearia do Jota, cuidar do visual é mais do que fazer um corte — é oferecer uma experiência de qualidade, com atendimento de respeito, praticidade e aquele cuidado que você merece.\n\nTrabalhamos com cortes modernos, barba na navalha e serviços pensados para deixar você sempre no estilo. Nosso objetivo é proporcionar um atendimento rápido, profissional e sem complicação.\n\nAqui você escolhe o serviço, o dia e o horário que deseja. Em poucos minutos, seu atendimento já fica agendado e você pode chegar à barbearia sabendo que sua vaga está garantida.\n\nSeu horário, do seu jeito\nChega de perder tempo esperando. Com nosso sistema de agendamento, você escolhe o melhor horário e já deixa tudo organizado antes de sair de casa.\n\nPagamento em dinheiro: a confirmação é feita diretamente pelo WhatsApp.\nPagamento via Pix: você paga um sinal de R$ 10,00 para garantir sua vaga. O valor do sinal é descontado do preço total do serviço.\n\nVaga garantida: após a confirmação do pagamento, seu horário fica reservado para você.\n\nOnde estamos\nBarbearia do Jota\nRua Javata, 1506 - Anchieta\n\nAtendimento: Terça a domingo, das 09h às 21h\nSegunda-feira: fechado\n\nVenha conhecer a Barbearia do Jota e tenha um atendimento de qualidade, com horário marcado e sem complicação.\n\nCorte certo, na hora certa.',
+  ABOUT: 'Na Barbearia do Jota, cuidar do visual Ã© mais do que fazer um corte â€” Ã© oferecer uma experiÃªncia de qualidade, com atendimento de respeito, praticidade e aquele cuidado que vocÃª merece.\n\nTrabalhamos com cortes modernos, barba na navalha e serviÃ§os pensados para deixar vocÃª sempre no estilo. Nosso objetivo Ã© proporcionar um atendimento rÃ¡pido, profissional e sem complicaÃ§Ã£o.\n\nAqui vocÃª escolhe o serviÃ§o, o dia e o horÃ¡rio que deseja. Em poucos minutos, seu atendimento jÃ¡ fica agendado e vocÃª pode chegar Ã  barbearia sabendo que sua vaga estÃ¡ garantida.\n\nSeu horÃ¡rio, do seu jeito\nChega de perder tempo esperando. Com nosso sistema de agendamento, vocÃª escolhe o melhor horÃ¡rio e jÃ¡ deixa tudo organizado antes de sair de casa.\n\nPagamento em dinheiro: a confirmaÃ§Ã£o Ã© feita diretamente pelo WhatsApp.\nPagamento via Pix: vocÃª paga um sinal de R$ 10,00 para garantir sua vaga. O valor do sinal Ã© descontado do preÃ§o total do serviÃ§o.\n\nVaga garantida: apÃ³s a confirmaÃ§Ã£o do pagamento, seu horÃ¡rio fica reservado para vocÃª.\n\nOnde estamos\nBarbearia do Jota\nRua Javata, 1506 - Anchieta\n\nAtendimento: TerÃ§a a domingo, das 09h Ã s 21h\nSegunda-feira: fechado\n\nVenha conhecer a Barbearia do Jota e tenha um atendimento de qualidade, com horÃ¡rio marcado e sem complicaÃ§Ã£o.\n\nCorte certo, na hora certa.',
 };
 
-// ===== serviços =====
+// ===== serviÃ§os =====
 const SERVICES = [
-  { id: 'corte', name: 'Corte normal', desc: 'só máquina', price: 30, duration: 60, icon: '✂️' },
-  { id: 'corte-simples', name: 'Corte Simples', desc: 'Corte rápido e prático', price: 22, duration: 30, icon: '✂️' },
-  { id: 'barba', name: 'Barba', desc: 'Barba completa com navalha', price: 15, duration: 30, icon: '🧔' },
-  { id: 'cavanhaque', name: 'Cavanhaque', desc: 'Cavanhaque com navalha', price: 12, duration: 30, icon: '🪒' },
-  { id: 'pe', name: 'Pé', desc: 'Fazer o pezinho do cabelo', price: 10, duration: 20, icon: '🦶' },
-  { id: 'barba-retirar-tudo', name: 'Barba (retirar tudo)', desc: 'Remoção completa de barba', price: 12, duration: 30, icon: '🪒' },
-  { id: 'sobrancelha', name: 'Sobrancelha', desc: 'Design + navalha', price: 7, duration: 15, icon: '🤨' },
-  { id: 'pigmentacao', name: 'Pigmentação', desc: 'Pigmentação capilar', price: 15, duration: 30, icon: '🎨' },
-  { id: 'pigmentacao-barba', name: 'Pigmentação na Barba', desc: 'Pigmentação na barba', price: 10, duration: 30, icon: '🎨' },
-  { id: 'reflexo', name: 'Reflexo', desc: 'Reflexo com matização', price: 45, duration: 90, icon: '🎨' },
-  { id: 'nevou', name: 'Nevou', desc: 'Efeito nevado nos cabelos', price: 50, duration: 90, icon: '❄️' },
-  { id: 'corte-kids', name: 'Corte Kids', desc: 'Corte para crianças', price: 35, duration: 60, icon: '👦' },
+  { id: 'corte', name: 'Corte normal', desc: 'sÃ³ mÃ¡quina', price: 30, duration: 60, icon: 'âœ‚ï¸' },
+  { id: 'corte-simples', name: 'Corte Simples', desc: 'Corte rÃ¡pido e prÃ¡tico', price: 22, duration: 30, icon: 'âœ‚ï¸' },
+  { id: 'barba', name: 'Barba', desc: 'Barba completa com navalha', price: 15, duration: 30, icon: 'ðŸ§”' },
+  { id: 'cavanhaque', name: 'Cavanhaque', desc: 'Cavanhaque com navalha', price: 12, duration: 30, icon: 'ðŸª’' },
+  { id: 'pe', name: 'PÃ©', desc: 'Fazer o pezinho do cabelo', price: 10, duration: 20, icon: 'ðŸ¦¶' },
+  { id: 'barba-retirar-tudo', name: 'Barba (retirar tudo)', desc: 'RemoÃ§Ã£o completa de barba', price: 12, duration: 30, icon: 'ðŸª’' },
+  { id: 'sobrancelha', name: 'Sobrancelha', desc: 'Design + navalha', price: 7, duration: 15, icon: 'ðŸ¤¨' },
+  { id: 'pigmentacao', name: 'PigmentaÃ§Ã£o', desc: 'PigmentaÃ§Ã£o capilar', price: 15, duration: 30, icon: 'ðŸŽ¨' },
+  { id: 'pigmentacao-barba', name: 'PigmentaÃ§Ã£o na Barba', desc: 'PigmentaÃ§Ã£o na barba', price: 10, duration: 30, icon: 'ðŸŽ¨' },
+  { id: 'reflexo', name: 'Reflexo', desc: 'Reflexo com matizaÃ§Ã£o', price: 45, duration: 90, icon: 'ðŸŽ¨' },
+  { id: 'nevou', name: 'Nevou', desc: 'Efeito nevado nos cabelos', price: 50, duration: 90, icon: 'â„ï¸' },
+  { id: 'corte-kids', name: 'Corte Kids', desc: 'Corte para crianÃ§as', price: 35, duration: 60, icon: 'ðŸ‘¦' },
 ];
 
 const TIME_SLOTS = ['09:00','09:40','10:20','11:00','11:40','12:20','13:00','13:40','14:20','15:00','15:40','16:20','17:00','17:40','18:20','19:00','19:40','20:20','21:00'];
 const LS_KEY = 'barbearia_bookings_v1';
-const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-const DIAS = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
+const MESES = ['Janeiro','Fevereiro','MarÃ§o','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DIAS = ['DOM','SEG','TER','QUA','QUI','SEX','SÃB'];
 
 // desliga a restauracao automatica de scroll do navegador
 // (senao ao recarregar a pagina volta para onde estava)
@@ -109,9 +109,9 @@ function newId() { return 'BK' + Date.now().toString(36).toUpperCase() + Math.fl
 function payLabel(b) {
   if (b.payMethod === 'pix') {
     const signal = signalOf(b.price); const rest = b.price - signal;
-    if (b.pixStatus === 'pago') return `Pix sinal ${BRL(signal)} PAGO ✔ · restante ${BRL(rest)}`;
-    if (b.pixStatus === 'aguardando') return `Pix sinal ${BRL(signal)} aguardando · restante ${BRL(rest)}`;
-    return `Pix sinal ${BRL(signal)} · restante ${BRL(rest)}`;
+    if (b.pixStatus === 'pago') return `Pix sinal ${BRL(signal)} PAGO âœ” Â· restante ${BRL(rest)}`;
+    if (b.pixStatus === 'aguardando') return `Pix sinal ${BRL(signal)} aguardando Â· restante ${BRL(rest)}`;
+    return `Pix sinal ${BRL(signal)} Â· restante ${BRL(rest)}`;
   }
   return 'Dinheiro no local';
 }
@@ -119,19 +119,19 @@ function buildMsg(b) {
   const signal = b.payMethod === 'pix' ? signalOf(b.price) : 0;
   const rest = b.price - signal;
   return [
-    `💈 *${CONFIG.BARBER_NAME}* — Novo agendamento`,
+    `ðŸ’ˆ *${CONFIG.BARBER_NAME}* â€” Novo agendamento`,
     ``,
-    `🔖 Código: ${b.id}`,
-    `👤 Nome: ${b.clientName}`,
-    `📞 WhatsApp: ${b.clientPhone}`,
-    `✂️ Serviço: ${b.serviceName} — ${BRL(b.price)}`,
-    `📅 Data: ${b.dateLabel} (${b.dow}) às ${b.time}`,
-    b.note ? `📝 Observação: ${b.note}` : null,
-    `💳 Pagamento: ${payLabel(b)}`,
-    b.payMethod === 'pix' ? `💰 Total: ${BRL(b.price)} · Sinal: ${BRL(signal)} · Restante: ${BRL(rest)}` : `💰 Total no local: ${BRL(b.price)}`,
-    b.mpPaymentId ? `🧾 MP: ${b.mpPaymentId}` : null,
+    `ðŸ”– CÃ³digo: ${b.id}`,
+    `ðŸ‘¤ Nome: ${b.clientName}`,
+    `ðŸ“ž WhatsApp: ${b.clientPhone}`,
+    `âœ‚ï¸ ServiÃ§o: ${b.serviceName} â€” ${BRL(b.price)}`,
+    `ðŸ“… Data: ${b.dateLabel} (${b.dow}) Ã s ${b.time}`,
+    b.note ? `ðŸ“ ObservaÃ§Ã£o: ${b.note}` : null,
+    `ðŸ’³ Pagamento: ${payLabel(b)}`,
+    b.payMethod === 'pix' ? `ðŸ’° Total: ${BRL(b.price)} Â· Sinal: ${BRL(signal)} Â· Restante: ${BRL(rest)}` : `ðŸ’° Total no local: ${BRL(b.price)}`,
+    b.mpPaymentId ? `ðŸ§¾ MP: ${b.mpPaymentId}` : null,
     ``,
-    `Aguardo confirmação! 🙏`,
+    `Aguardo confirmaÃ§Ã£o! ðŸ™`,
   ].filter(Boolean).join('\n');
 }
 function openWhatsApp(booking) {
@@ -146,7 +146,7 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2800);
 }
 
-// a rolagem animada só funciona com a aba visível
+// a rolagem animada sÃ³ funciona com a aba visÃ­vel
 const podeAnimar = () => document.visibilityState === 'visible' && typeof requestAnimationFrame === 'function';
 
 // ===== rolagem suave (funciona em qualquer navegador) =====
@@ -156,7 +156,7 @@ function rolarPara(y) {
   const inicio = window.pageYOffset;
   const dist = destino - inicio;
   if (Math.abs(dist) < 2) return;
-  // aba oculta / sem animação: vai direto
+  // aba oculta / sem animaÃ§Ã£o: vai direto
   if (!podeAnimar()) {
     window.scrollTo(0, destino);
     return;
@@ -191,7 +191,7 @@ function showStep(n) {
     el.classList.toggle('active', s === n);
     el.classList.toggle('done', s < n);
   });
-  // nao rola automaticamente — cada chamador decide se quer rolar
+  // nao rola automaticamente â€” cada chamador decide se quer rolar
 }
 
 // rola ate a barra de etapas (usado pelos botoes de navegacao)
@@ -204,12 +204,12 @@ function irParaPassos() {
   window.scrollTo({ top: Math.max(0, topo), behavior: 'smooth' });
 }
 
-// ===== serviços =====
+// ===== serviÃ§os =====
 function renderServices() {
   $('servicesGrid').innerHTML = SERVICES.map((s) => `
     <div class="card ${serviceIds.includes(s.id) ? 'selected' : ''}" data-id="${s.id}">
       <div class="icon">${s.icon}</div>
-      <div><b>${s.name}</b><small>${s.desc} · ⏱ ${s.duration} min · ${BRL(s.price)}</small></div>
+      <div><b>${s.name}</b><small>${s.desc} Â· â± ${s.duration} min Â· ${BRL(s.price)}</small></div>
     </div>`).join('');
   document.querySelectorAll('#servicesGrid .card').forEach((el) =>
     el.onclick = () => {
@@ -225,7 +225,7 @@ function renderServices() {
 }
 function renderAll() { renderServices(); renderCalendar(); renderTimes(); renderPay(); renderResume(); }
 
-// ===== calendário =====
+// ===== calendÃ¡rio =====
 function initCalendar() {
   const n = new Date();
   viewY = n.getFullYear(); viewM = n.getMonth();
@@ -261,7 +261,7 @@ function renderCalendar() {
     });
 }
 
-// ===== horários (etapa 3) =====
+// ===== horÃ¡rios (etapa 3) =====
 async function renderTimes() {
   const box = $('timesGrid');
   if (!dayKey) { box.innerHTML = '<span class="tiny">Escolha um dia na etapa anterior.</span>'; return; }
@@ -274,15 +274,15 @@ async function renderTimes() {
   if (fechadoAgora && isToday) {
     const abreTxt = abreAsLoja();
     const fechaTxt = fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja();
-    box.innerHTML = '<span class="closed-big">🔴 Fechado agora</span>'
+    box.innerHTML = '<span class="closed-big">ðŸ”´ Fechado agora</span>'
       + '<p class="tiny">Acabaram as vagas de hoje</p>'
-      + '<p class="tiny">marque uma vaga pra manhã — a barbearia abre de ' + abreTxt + ' às ' + fechaTxt + ' 🎉✂️ As vagas de hoje já se esgotaram!</p>'
-      + '<p class="tiny">Mas calma, amanhã tem mais! 😎💈</p>'
-      + '<p class="tiny">📅 Garanta já o seu horário para amanhã! Atendemos das ' + abreTxt + ' às ' + fechaTxt + ', esperando por você para aquele corte na régua! 🔥💇‍♂️</p>'
-      + '<p class="tiny">👇 Desça a página e marque seu horário!</p>'
-      + '<p class="tiny">Sua melhor versão começa com um bom corte! 🚀💈</p>';
+      + '<p class="tiny">marque uma vaga pra manhÃ£ â€” a barbearia abre de ' + abreTxt + ' Ã s ' + fechaTxt + ' ðŸŽ‰âœ‚ï¸ As vagas de hoje jÃ¡ se esgotaram!</p>'
+      + '<p class="tiny">Mas calma, amanhÃ£ tem mais! ðŸ˜ŽðŸ’ˆ</p>'
+      + '<p class="tiny">ðŸ“… Garanta jÃ¡ o seu horÃ¡rio para amanhÃ£! Atendemos das ' + abreTxt + ' Ã s ' + fechaTxt + ', esperando por vocÃª para aquele corte na rÃ©gua! ðŸ”¥ðŸ’‡â€â™‚ï¸</p>'
+      + '<p class="tiny">ðŸ‘‡ DesÃ§a a pÃ¡gina e marque seu horÃ¡rio!</p>'
+      + '<p class="tiny">Sua melhor versÃ£o comeÃ§a com um bom corte! ðŸš€ðŸ’ˆ</p>';
     const hintF = $('busyHint');
-    if (hintF) hintF.textContent = '🔴 Fechado agora — não é possível agendar hoje.';
+    if (hintF) hintF.textContent = 'ðŸ”´ Fechado agora â€” nÃ£o Ã© possÃ­vel agendar hoje.';
     const btnR = $('btnReservarHoje');
     if (btnR) btnR.style.display = 'none';
     return;
@@ -290,11 +290,11 @@ async function renderTimes() {
   if (fechadoAgora && !isToday) {
     // fechado agora, mas outro dia: mostra normal (a loja pode abrir de novo)
   }
-  // o barbeiro forcou ABERTO: hoje o horario da janela nao bloqueia (só vence o que passou)
+  // o barbeiro forcou ABERTO: hoje o horario da janela nao bloqueia (sÃ³ vence o que passou)
   const forcouAberto = isToday && statusLoja.modo === 'manual' && statusLoja.aberto === true;
   const abreM = minutosDe(abreAsLoja());
   let fechaM = minutosDe(fechaAsLoja());
-  // fecha no dia seguinte (ex.: 09:00 às 03:00 ou 00:00 = até meia-noite)
+  // fecha no dia seguinte (ex.: 09:00 Ã s 03:00 ou 00:00 = atÃ© meia-noite)
   if (fechaM <= abreM) fechaM += 24 * 60;
   const list = await loadBookings();
   box.innerHTML = TIME_SLOTS.map((t) => {
@@ -316,13 +316,13 @@ async function renderTimes() {
   });
   const hint = $('busyHint');
   const total = box.querySelectorAll('.slot').length;
-  const faixa = `${abreAsLoja()}–${fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja()}`;
+  const faixa = `${abreAsLoja()}â€“${fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja()}`;
   if (hint) {
     hint.textContent = !total
-      ? 'Não há mais horários livres neste dia. Escolha outra data.'
+      ? 'NÃ£o hÃ¡ mais horÃ¡rios livres neste dia. Escolha outra data.'
       : isToday
-        ? `Horário de funcionamento: ${faixa}. Mostrando só os horários que ainda vão acontecer hoje. ${total} vaga(s) livre(s).`
-        : `Horário de funcionamento: ${faixa}. ${total} horário(s) disponível(is) neste dia.`;
+        ? `HorÃ¡rio de funcionamento: ${faixa}. Mostrando sÃ³ os horÃ¡rios que ainda vÃ£o acontecer hoje. ${total} vaga(s) livre(s).`
+        : `HorÃ¡rio de funcionamento: ${faixa}. ${total} horÃ¡rio(s) disponÃ­vel(is) neste dia.`;
   }
 }
 
@@ -331,7 +331,7 @@ function renderPay() {
   document.querySelectorAll('.payopt').forEach((el) => {
     const active = el.dataset.pay === payMethod;
     el.classList.toggle('selected', active);
-    el.querySelector('.radio').textContent = active ? '●' : '○';
+    el.querySelector('.radio').textContent = active ? 'â—' : 'â—‹';
   });
   const isPix = payMethod === 'pix';
   $('boxDinheiro').classList.toggle('hidden', isPix);
@@ -340,9 +340,9 @@ function renderPay() {
 
 function renderResume() {
   const services = getServices(serviceIds);
-  $('resumeService').textContent = services.map(s => `✂️ ${s.name}`).join(' · ');
-  $('resumeWhen').textContent = `📅 ${dayKey ? fmtFull(dayKey) + ' (' + dowOf(dayKey) + ')' : '—'} às ${time || '—'}`;
-  $('resumeClient').textContent = `👤 ${name || '—'} · 📞 ${phone || '—'}`;
+  $('resumeService').textContent = services.map(s => `âœ‚ï¸ ${s.name}`).join(' Â· ');
+  $('resumeWhen').textContent = `ðŸ“… ${dayKey ? fmtFull(dayKey) + ' (' + dowOf(dayKey) + ')' : 'â€”'} Ã s ${time || 'â€”'}`;
+  $('resumeClient').textContent = `ðŸ‘¤ ${name || 'â€”'} Â· ðŸ“ž ${phone || 'â€”'}`;
   const total = getTotalPrice(serviceIds);
   const totalDuration = getTotalDuration(serviceIds);
   $('resumePrice').textContent = BRL(total);
@@ -350,15 +350,15 @@ function renderResume() {
   const signal = signalOf(total);
   $('resumeDiscount').classList.toggle('hidden', !isPix);
   if (isPix) {
-    $('resumeSignalValue').textContent = `− ${BRL(signal)}`;
+    $('resumeSignalValue').textContent = `âˆ’ ${BRL(signal)}`;
     $('resumeRest').textContent = BRL(total - signal);
-    $('resumeSignal').textContent = `Sinal de ${BRL(signal)} via Pix descontado do total · Restante de ${BRL(total - signal)} paga no local`;
+    $('resumeSignal').textContent = `Sinal de ${BRL(signal)} via Pix descontado do total Â· Restante de ${BRL(total - signal)} paga no local`;
   } else {
     $('resumeSignal').textContent = 'Pagamento total em dinheiro no local';
   }
 }
 
-// ===== validação =====
+// ===== validaÃ§Ã£o =====
 function collectOrToast() {
   if (serviceIds.length === 0) { toast('Escolha pelo menos um corte.'); return null; }
   if (name.trim().length < 3) { toast('Digite seu nome completo.'); return null; }
@@ -391,7 +391,7 @@ async function confirmMoney() {
   showStep(1);
 }
 
-// ===== GERAÇÃO DO PIX (BR Code EMV com valor travado) =====
+// ===== GERAÃ‡ÃƒO DO PIX (BR Code EMV com valor travado) =====
 function tlv(id, value) {
   let v = String(value);
   return id + String(v.length).padStart(2, '0') + v;
@@ -405,7 +405,7 @@ function buildPixPayload(key, amount, txid) {
   const value = Number(amount).toFixed(2);
   const tx = String(txid || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 25).toUpperCase() || '***';
 
-  // merchant account: chave aleatória / CPF-CNPJ / email / telefone
+  // merchant account: chave aleatÃ³ria / CPF-CNPJ / email / telefone
   let account;
   if (/^\+?[0-9]{10,14}$/.test(k)) {
     account = tlv('00', 'br.gov.bcb.pix') + tlv('01', k);
@@ -440,14 +440,14 @@ function crc16(payload) {
   }
   return crc.toString(16).toUpperCase().padStart(4, '0');
 }
-// QR Code via serviço publico (funciona para qualquer app de banco).
+// QR Code via serviÃ§o publico (funciona para qualquer app de banco).
 // Se a imagem nao carregar, o copia-e-cola abaixo continua funcionando.
 function showPixQr(payload) {
   const box = $('pixQrBox');
   if (!box) return;
   box.innerHTML = '';
   if (!payload) {
-    box.innerHTML = '<span class="qr-msg">Use o código copia e cola ao lado</span>';
+    box.innerHTML = '<span class="qr-msg">Use o cÃ³digo copia e cola ao lado</span>';
     return;
   }
   const src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=4&data=' + encodeURIComponent(payload);
@@ -455,7 +455,7 @@ function showPixQr(payload) {
   newImg.src = src;
   newImg.alt = 'QR Code Pix';
   newImg.onerror = () => {
-    box.innerHTML = '<span class="qr-msg">Use o código copia e cola ao lado</span>';
+    box.innerHTML = '<span class="qr-msg">Use o cÃ³digo copia e cola ao lado</span>';
   };
   box.appendChild(newImg);
 }
@@ -490,19 +490,19 @@ async function generatePixBooking() {
   }
 }
 
-// Chave Pix precisa ser real (CPF, CNPJ, e-mail, telefone ou chave aleatória)
+// Chave Pix precisa ser real (CPF, CNPJ, e-mail, telefone ou chave aleatÃ³ria)
 const PIX_KEY_OK = () => {
   const k = normalizeKey(CONFIG.PIX_KEY);
   return !!k && k !== 'sua-chave-pix-aqui' && !k.startsWith('COLOQUE');
 };
 
 // ============================================================
-//  ATUALIZAÇÃO DO APLICATIVO
+//  ATUALIZAÃ‡ÃƒO DO APLICATIVO
 //
 //  O APK pergunta no GitHub se existe uma versao nova.
 //  Se tiver, mostra o popup com "Atualizar" e "Depois".
 //
-//  Para ligar, escreva no ⚙️ (campo "Repositorio"):
+//  Para ligar, escreva no âš™ï¸ (campo "Repositorio"):
 //     seu-usuario/barbearia-do-jota
 //  ou preencha GITHUB_USER e GITHUB_REPO no topo deste arquivo.
 // ============================================================
@@ -541,7 +541,7 @@ async function buscarUltimaVersao() {
   const url = `https://api.github.com/repos/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases/latest`;
   const resp = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
   if (resp.status === 404) {
-    throw new Error('repositório não encontrado ou privado (404)');
+    throw new Error('repositÃ³rio nÃ£o encontrado ou privado (404)');
   }
   if (resp.status === 403) {
     throw new Error('limite de consultas do GitHub atingido (403)');
@@ -557,26 +557,26 @@ function explicarErroGithub(erro, silencioso) {
   const alvo = r ? `${r.user}/${r.repo}` : '(vazio)';
 
   if (/404/.test(msg)) {
-    return 'Não achei o repositório ' + alvo + '.\n'
-      + 'Ele precisa ser PÚBLICO no GitHub:\n'
-      + 'Settings → Danger Zone → Change visibility → Public.\n'
+    return 'NÃ£o achei o repositÃ³rio ' + alvo + '.\n'
+      + 'Ele precisa ser PÃšBLICO no GitHub:\n'
+      + 'Settings â†’ Danger Zone â†’ Change visibility â†’ Public.\n'
       + 'E precisa existir uma Release (tag v1.0.0 ou maior).';
   }
   if (/403/.test(msg)) {
     return 'O GitHub bloqueou por excesso de consultas.\nTente de novo em alguns minutos.';
   }
   if (/Failed to fetch|NetworkError/i.test(msg)) {
-    return 'O celular está sem internet.\nAs atualizações só funcionam com internet.';
+    return 'O celular estÃ¡ sem internet.\nAs atualizaÃ§Ãµes sÃ³ funcionam com internet.';
   }
   if (!r) {
-    return 'Nenhum repositório configurado.\\nPreencha em ⚙️ → Repositório do GitHub.';
+    return 'Nenhum repositÃ³rio configurado.\\nPreencha em âš™ï¸ â†’ RepositÃ³rio do GitHub.';
   }
   return msg;
 }
 
 async function checarAtualizacao({ silencioso = true } = {}) {
   if (!repoSalvo()) {
-    if (!silencioso) toast('Preencha o repositório do GitHub nos ajustes.');
+    if (!silencioso) toast('Preencha o repositÃ³rio do GitHub nos ajustes.');
     return null;
   }
   try {
@@ -587,7 +587,7 @@ async function checarAtualizacao({ silencioso = true } = {}) {
 
     // FORCAR: se as notas da release contiverem [FORCAR] ou [FORCE],
     // o popup aparece mesmo que a versao seja menor (rollback).
-    // Mas SÓ UMA VEZ por versao — quem fechou, nao ve de novo nessa versao.
+    // Mas SÃ“ UMA VEZ por versao â€” quem fechou, nao ve de novo nessa versao.
     const forcar = /\[FORCAR\]|\[FORCE\]/i.test(notas);
 
     if (forcar) {
@@ -596,7 +596,7 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     } else if (!versaoEhMaior(nova, CONFIG.APP_VERSION)) return null;
 
     const adiado = Number(localStorage.getItem(LS_UPDATE_PARA) || 0);
-    // se for forçado, ignora o "Depois" — sempre aparece
+    // se for forÃ§ado, ignora o "Depois" â€” sempre aparece
     if (!forcar && silencioso && adiado > Date.now() - 5 * 60 * 1000) return null;   // "Depois" lembra por 5 minutos
 
     const asset = (rel.assets || []).find(
@@ -613,14 +613,14 @@ async function checarAtualizacao({ silencioso = true } = {}) {
 
 // popup de aviso de problema (sem ser o de "atualizacao disponivel")
 function mostrarAvisoUpdate(texto) {
-  $('updVersao').textContent = 'Não consegui procurar atualização';
-  $('updAtual').textContent = `Versão ${CONFIG.APP_VERSION}`;
+  $('updVersao').textContent = 'NÃ£o consegui procurar atualizaÃ§Ã£o';
+  $('updAtual').textContent = `VersÃ£o ${CONFIG.APP_VERSION}`;
   $('updNotas').innerHTML = String(texto).replace(/</g, '&lt;').replace(/\n/g, '<br>');
   $('btnAtualizar').onclick = () => {
     const r = repoSalvo();
     if (r) window.open(`https://github.com/${r.user}/${r.repo}/releases`, '_blank', 'noopener');
   };
-  $('btnAtualizar').textContent = '🔗 Abrir o GitHub';
+  $('btnAtualizar').textContent = 'ðŸ”— Abrir o GitHub';
   $('btnDepois').onclick = () => $('modalUpdate').classList.add('hidden');
   $('modalUpdate').classList.remove('hidden');
 }
@@ -629,24 +629,24 @@ function mostrarAtualizacao(versao, release, asset, forcar) {
   // tira a tag [FORCAR] do texto que o cliente ve
   const notas = String(release.body || '').replace(/\[FORCAR\]|\[FORCE\]/gi, '').trim().slice(0, 400);
   if (forcar) {
-    $('updVersao').textContent = `⚠️ Atualização obrigatória ${versao}`;
-    $('updAtual').textContent = `Você está na versão ${CONFIG.APP_VERSION} (será substituída)`;
+    $('updVersao').textContent = `âš ï¸ AtualizaÃ§Ã£o obrigatÃ³ria ${versao}`;
+    $('updAtual').textContent = `VocÃª estÃ¡ na versÃ£o ${CONFIG.APP_VERSION} (serÃ¡ substituÃ­da)`;
   } else {
-    $('updVersao').textContent = `Versão ${versao} disponível`;
-    $('updAtual').textContent = `Você está na versão ${CONFIG.APP_VERSION}`;
+    $('updVersao').textContent = `VersÃ£o ${versao} disponÃ­vel`;
+    $('updAtual').textContent = `VocÃª estÃ¡ na versÃ£o ${CONFIG.APP_VERSION}`;
   }
   $('updNotas').innerHTML = notas
     ? notas.replace(/</g, '&lt;').replace(/\n/g, '<br>')
-    : 'Correções e melhorias nesta versão.';
+    : 'CorreÃ§Ãµes e melhorias nesta versÃ£o.';
   const link = asset ? asset.browser_download_url : release.html_url;
-  $('btnAtualizar').textContent = '⬇️ Atualizar agora';
+  $('btnAtualizar').textContent = 'â¬‡ï¸ Atualizar agora';
   $('btnAtualizar').onclick = () => {
     localStorage.setItem(LS_UPDATE_VISTO, versao);
     baixarEInstalar(link);
   };
   $('btnDepois').onclick = () => {
     if (forcar) {
-      // forçado: fecha e NAO volta nesta versao (aparece apenas 1 vez)
+      // forÃ§ado: fecha e NAO volta nesta versao (aparece apenas 1 vez)
       localStorage.setItem(LS_UPDATE_VISTO, versao);
       $('modalUpdate').classList.add('hidden');
       return;
@@ -659,7 +659,7 @@ function mostrarAtualizacao(versao, release, asset, forcar) {
 }
 
 // ============================================================
-//  ATUALIZAR: baixa o APK e abre a instalação do Android
+//  ATUALIZAR: baixa o APK e abre a instalaÃ§Ã£o do Android
 // ============================================================
 function baixarEInstalar(url) {
   if (!url) return;
@@ -667,12 +667,12 @@ function baixarEInstalar(url) {
 
   const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
   if (!nativo) {
-    // iPhone/iPad: o app e o proprio site — atualizar e recarregar a pagina
+    // iPhone/iPad: o app e o proprio site â€” atualizar e recarregar a pagina
     const ehIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (ehIOS) {
-      $('updNotas').textContent = 'No iPhone a atualização é instantânea: toque aí embaixo e a página recarrega na versão nova.';
-      $('btnAtualizar').textContent = '🔄 Recarregar com a versão nova';
+      $('updNotas').textContent = 'No iPhone a atualizaÃ§Ã£o Ã© instantÃ¢nea: toque aÃ­ embaixo e a pÃ¡gina recarrega na versÃ£o nova.';
+      $('btnAtualizar').textContent = 'ðŸ”„ Recarregar com a versÃ£o nova';
       $('btnAtualizar').disabled = false;
       $('btnAtualizar').onclick = () => location.reload();
       return;
@@ -686,29 +686,29 @@ function baixarEInstalar(url) {
     return;
   }
 
-  $('updNotas').textContent = 'Baixando a atualização. Ela será instalada em seguida...';
+  $('updNotas').textContent = 'Baixando a atualizaÃ§Ã£o. Ela serÃ¡ instalada em seguida...';
   $('btnAtualizar').disabled = true;
-  $('btnAtualizar').textContent = '⏳ Baixando...';
+  $('btnAtualizar').textContent = 'â³ Baixando...';
 
   nativo.instalar({ url })
     .then(() => {
-      $('btnAtualizar').textContent = '📥 Abrir pasta de downloads';
+      $('btnAtualizar').textContent = 'ðŸ“¥ Abrir pasta de downloads';
       $('btnAtualizar').disabled = false;
       $('btnAtualizar').onclick = () => nativo.abrirDownloads().catch(() => {});
       $('updNotas').textContent =
-        'Download iniciado. Se a instalação não abrir sozinha, toque no arquivo na pasta Downloads.';
+        'Download iniciado. Se a instalaÃ§Ã£o nÃ£o abrir sozinha, toque no arquivo na pasta Downloads.';
     })
     .catch((e) => {
       $('btnAtualizar').disabled = false;
-      $('btnAtualizar').textContent = '⬇️ Atualizar agora';
+      $('btnAtualizar').textContent = 'â¬‡ï¸ Atualizar agora';
       $('btnAtualizar').onclick = () => baixarEInstalar(url);
-      $('updNotas').textContent = 'Não consegui baixar agora: ' + (e && e.message ? e.message : 'erro')
+      $('updNotas').textContent = 'NÃ£o consegui baixar agora: ' + (e && e.message ? e.message : 'erro')
         + '. Tente de novo com a internet ligada.';
     });
 }
 
 // ============================================================
-//  AJUSTES — o barbeiro troca o endereco do servidor pelo proprio
+//  AJUSTES â€” o barbeiro troca o endereco do servidor pelo proprio
 //  app, sem precisar refazer o APK. Fica salvo no aparelho.
 // ============================================================
 const LS_SERVIDOR = 'barbearia_servidor_v1';
@@ -721,8 +721,8 @@ function servidores() {
 function abrirAjustes() {
   $('appVersao').textContent = CONFIG.APP_VERSION;
   $('updStatus').textContent = repoSalvo()
-    ? `Versão mais recente: ${CONFIG.APP_VERSION}`
-    : 'Atualizações automáticas desligadas.';
+    ? `VersÃ£o mais recente: ${CONFIG.APP_VERSION}`
+    : 'AtualizaÃ§Ãµes automÃ¡ticas desligadas.';
   $('modalAjustes').classList.remove('hidden');
 }
 
@@ -756,8 +756,8 @@ async function chamarApi(rota, opcoes) {
 }
 
 // ---------- envia o agendamento para o PAINEL do barbeiro ----------
-// 1) pelo canal da INTERNET (ntfy) — chega no Painel direto, sem PC
-// 2) pelo servidor do PC (opcional) — se estiver ligado, guarda em central
+// 1) pelo canal da INTERNET (ntfy) â€” chega no Painel direto, sem PC
+// 2) pelo servidor do PC (opcional) â€” se estiver ligado, guarda em central
 // Se os dois falharem, fica na fila e tenta de novo sozinho.
 const LS_SYNC = 'barbearia_sync_v1';
 function filaSync(b) {
@@ -799,7 +799,7 @@ async function descarregarSync() {
     const quando = Date.parse(fila[id] && fila[id].createdAt || 0) || agora;
     if (agora - quando > 3 * 24 * 60 * 60 * 1000) { entregues.push(id); continue; }
     try { if (await mandarAgendamento(fila[id])) entregues.push(id); }
-    catch { /* não entregou agora — tenta na próxima vez */ }
+    catch { /* nÃ£o entregou agora â€” tenta na prÃ³xima vez */ }
   }
   if (!entregues.length) return;
   // re-le para nao apagar agendamento novo que entrou na fila durante o envio
@@ -812,7 +812,7 @@ async function descarregarSync() {
 
 // ---------- status aberto/fechado vindo do painel do barbeiro ----------
 // O Painel publica no canal (ntfy). O site fica OUVINDO ao vivo (SSE)
-// e ainda faz uma consulta de segurança a cada 30 segundos.
+// e ainda faz uma consulta de seguranÃ§a a cada 30 segundos.
 let statusLoja = ((tem) => {
   try {
     const s = JSON.parse(localStorage.getItem('barbearia_status_loja_v1') || 'null');
@@ -824,13 +824,13 @@ let statusLoja = ((tem) => {
 
 // aplica o status novo e redesenha a loja na hora
 function aplicarStatusLoja(s) {
-  // aplica se QUALQUER campo mudou (modo, aberto, abreAs, fechaAs) —
-  // sem depender de timestamp (que falha com relógio desregulado)
+  // aplica se QUALQUER campo mudou (modo, aberto, abreAs, fechaAs) â€”
+  // sem depender de timestamp (que falha com relÃ³gio desregulado)
   const mudou = (s.modo && s.modo !== statusLoja.modo)
     || (s.aberto !== undefined && s.aberto !== statusLoja.aberto)
     || (s.abreAs && s.abreAs !== statusLoja.abreAs)
     || (s.fechaAs && s.fechaAs !== statusLoja.fechaAs);
-  if (!mudou && statusLoja.ok) return;   // nada novo — nao re-renderiza
+  if (!mudou && statusLoja.ok) return;   // nada novo â€” nao re-renderiza
   statusLoja = { ...s, ok: true };
   try { localStorage.setItem('barbearia_status_loja_v1', JSON.stringify(statusLoja)); } catch { /* ignora */ }
   renderToday();
@@ -840,54 +840,34 @@ function aplicarStatusLoja(s) {
 }
 
 // decodifica cada linha do canal (chega por SSE ou pela consulta)
-async function processarCanal(texto) {
-  for (const linha of String(texto || '').split('\n')) {
+async function processarCanal(texto, { aoVivo = false } = {}) {
+  // coleta todas as mensagens validas
+  const msgs = [];
+  for (const linha of String(texto || '').split('\\n')) {
     let o = null, p = null;
     try { o = JSON.parse(linha); } catch { continue; }
     if (!o || o.event !== 'message' || !o.message) continue;
     try { p = JSON.parse(o.message); } catch { continue; }
-    if (p && p.t === 's' && p.s) {
-      // mudanca de aberto/fechado do barbeiro
-      const tsNovo = Number(p.s.ts) || 0;
-    const tsAtual = Number(statusLoja.ts) || 0;
-    const horasMudaram = (p.s.abreAs && p.s.abreAs !== statusLoja.abreAs)
-      || (p.s.fechaAs && p.s.fechaAs !== statusLoja.fechaAs)
-      || (p.s.modo && p.s.modo !== statusLoja.modo)
-      || (p.s.aberto !== undefined && p.s.aberto !== statusLoja.aberto);
-    if (horasMudaram) aplicarStatusLoja(p.s);   // aplica se QUALQUER campo mudou (sem depender de timestamp)
-    } else if (p && p.t === 'e' && p.b && p.b.id) {
-      // a barbearia EDITOU o agendamento (dia/hora/etc): atualiza aqui na hora
-      const atual = loadBookings().find((b) => b.id === p.b.id);
-      if (atual) {
-        updateBooking(p.b.id, { ...p.b });
-        if (pixBooking && pixBooking.id === p.b.id) {
-          pixBooking = { ...pixBooking, ...p.b };
-          renderPixArea();
-        }
-        // se ainda esta na fila de envio, atualiza la tambem
-        try {
-          const fila = JSON.parse(localStorage.getItem(LS_SYNC) || '{}');
-          if (fila[p.b.id]) { fila[p.b.id] = { ...fila[p.b.id], ...p.b }; localStorage.setItem(LS_SYNC, JSON.stringify(fila)); }
-        } catch { /* ignora */ }
-        renderAll();
-        toast('✏️ A barbearia atualizou seu agendamento.');
-      }
-    } else if (p && p.t === 'd' && p.b && p.b.id) {
-      // a barbearia EXCLUIU o agendamento: some daqui na hora (e da fila de envio,
-      // para nao voltar sozinho depois)
-      const atual = loadBookings().find((b) => b.id === p.b.id);
-      saveBookings(loadBookings().filter((b) => b.id !== p.b.id));
-      if (pixBooking && pixBooking.id === p.b.id) pixBooking = null;
-      try {
-        const fila = JSON.parse(localStorage.getItem(LS_SYNC) || '{}');
-        if (fila[p.b.id]) { delete fila[p.b.id]; localStorage.setItem(LS_SYNC, JSON.stringify(fila)); }
-      } catch { /* ignora */ }
-      if (atual) {
-        renderAll();
-        toast('🗑️ Sua reserva foi cancelada pela barbearia. Fale no WhatsApp se tiver dúvida.');
-      }
-    } else if (p && p.t === 'p' && p.b && p.b.id && p.b.pixStatus === 'pago') {
-      // a barbearia (ou o PC) confirmou o Pix: marca pago e libera o WhatsApp
+    msgs.push(p);
+  }
+
+  // STATUS: no canal ao vivo aplica cada um (chegam em ordem);
+  // no poll (historico de 12h) aplica APENAS o mais recente por ts â€”
+  // isso evita a oscilacao "abre/fecha/abre" ao reprocessar o historico
+  const statusMsgs = msgs.filter((p) => p && p.t === 's' && p.s);
+  if (statusMsgs.length) {
+    if (aoVivo) {
+      for (const p of statusMsgs) aplicarStatusLoja(p.s);
+    } else {
+      const maisNovo = statusMsgs.reduce((a, b) =>
+        (Number(b.s.ts) || 0) > (Number(a.s.ts) || 0) ? b : a);
+      aplicarStatusLoja(maisNovo.s);
+    }
+  }
+
+  // agendamentos / pix / edicoes / exclusoes: processa todos (idempotentes)
+  for (const p of msgs) {
+    if (p && p.t === 'p' && p.b && p.b.id && p.b.pixStatus === 'pago') {
       const atual = loadBookings().find((b) => b.id === p.b.id);
       if (atual && atual.pixStatus !== 'pago') {
         updateBooking(p.b.id, { pixStatus: 'pago', status: p.b.status || 'confirmado' });
@@ -897,7 +877,34 @@ async function processarCanal(texto) {
           renderPixArea();
         }
         checkPixOnLoad();
-        toast('✅ Sinal confirmado! Agora é só enviar no WhatsApp.');
+        toast('âœ… Sinal confirmado! Agora Ã© sÃ³ enviar no WhatsApp.');
+      }
+    } else if (p && p.t === 'e' && p.b && p.b.id) {
+      const atual = loadBookings().find((b) => b.id === p.b.id);
+      if (atual) {
+        updateBooking(p.b.id, { ...p.b });
+        if (pixBooking && pixBooking.id === p.b.id) {
+          pixBooking = { ...pixBooking, ...p.b };
+          renderPixArea();
+        }
+        try {
+          const fila = JSON.parse(localStorage.getItem(LS_SYNC) || '{}');
+          if (fila[p.b.id]) { fila[p.b.id] = { ...fila[p.b.id], ...p.b }; localStorage.setItem(LS_SYNC, JSON.stringify(fila)); }
+        } catch { /* ignora */ }
+        renderAll();
+        toast('âœï¸ A barbearia atualizou seu agendamento.');
+      }
+    } else if (p && p.t === 'd' && p.b && p.b.id) {
+      const atual = loadBookings().find((b) => b.id === p.b.id);
+      saveBookings(loadBookings().filter((b) => b.id !== p.b.id));
+      if (pixBooking && pixBooking.id === p.b.id) pixBooking = null;
+      try {
+        const fila = JSON.parse(localStorage.getItem(LS_SYNC) || '{}');
+        if (fila[p.b.id]) { delete fila[p.b.id]; localStorage.setItem(LS_SYNC, JSON.stringify(fila)); }
+      } catch { /* ignora */ }
+      if (atual) {
+        renderAll();
+        toast('ðŸ—‘ï¸ Sua reserva foi cancelada pela barbearia. Fale no WhatsApp se tiver dÃºvida.');
       }
     }
   }
@@ -909,9 +916,9 @@ function ligarCanalCliente() {
   try { if (sseLoja) sseLoja.close(); } catch { /* nada */ }
   try {
     sseLoja = new EventSource(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}/sse`);
-    sseLoja.onmessage = (ev) => { processarCanal(ev.data); };
+    sseLoja.onmessage = (ev) => { processarCanal(ev.data, { aoVivo: true }); };
     // se cair, o navegador reconecta sozinho
-  } catch { /* sem internet — a consulta de seguranca cobre */ }
+  } catch { /* sem internet â€” a consulta de seguranca cobre */ }
 }
 
 // consulta de seguranca (caso o canal ao vivo nao esteja aberto)
@@ -919,10 +926,10 @@ async function carregarStatusLoja() {
   try {
     const resp = await fetch(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}/json?poll=1&since=12h`);
     await processarCanal(await resp.text());
-  } catch { /* sem internet — usa o que ja tenho em casa */ }
-  // reforco: se o PC estiver ligado, confere o status central — mas SO se o
+  } catch { /* sem internet â€” usa o que ja tenho em casa */ }
+  // reforco: se o PC estiver ligado, confere o status central â€” mas SO se o
   // cliente nao tiver um status recente (evita sobrescrever "fechado" manual
-  // com uma copia velha do servidor — esse era o bug de "abre sozinho")
+  // com uma copia velha do servidor â€” esse era o bug de "abre sozinho")
   try {
     const r2 = await chamarApi('/api/status');
     if (r2 && (r2.modo === 'auto' || r2.modo === 'manual')) {
@@ -942,14 +949,14 @@ async function carregarStatusLoja() {
         });
       }
     }
-  } catch { /* PC desligado — o canal da internet cobre */ }
+  } catch { /* PC desligado â€” o canal da internet cobre */ }
 }
 const minutosDe = (t) => { const s = String(t || '').trim(); if (s === '00:00') return 24 * 60; const [h, m] = s.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
 const abreAsLoja = () => statusLoja.ok ? (statusLoja.abreAs || '09:00') : '09:00';
 const fechaAsLoja = () => statusLoja.ok ? (statusLoja.fechaAs || '21:00') : '21:00';
 
 // ============================================================
-//  NATAL — ligado pelo barbeiro no Painel (neve + presente)
+//  NATAL â€” ligado pelo barbeiro no Painel (neve + presente)
 //  Muita animacao: neve em 2 camadas com deriva, emojis
 //  natalinos no ar, presente brilhando com faiscas e
 //  explosao de confete ao abrir.
@@ -957,7 +964,7 @@ const fechaAsLoja = () => statusLoja.ok ? (statusLoja.fechaAs || '21:00') : '21:
 let neveTimer = null;
 let faiscaTimer = null;
 
-const NATAL_EMOJIS = ['🎁', '🎄', '✂️', '🎅', '⭐', '🤶', '🔔', '❄️', '🦌', '🍬', '🕯️', '🌟'];
+const NATAL_EMOJIS = ['ðŸŽ', 'ðŸŽ„', 'âœ‚ï¸', 'ðŸŽ…', 'â­', 'ðŸ¤¶', 'ðŸ””', 'â„ï¸', 'ðŸ¦Œ', 'ðŸ¬', 'ðŸ•¯ï¸', 'ðŸŒŸ'];
 
 function renderNatal() {
   // ---------- NEVE + LUZES (a neve cai na tela toda) ----------
@@ -967,7 +974,7 @@ function renderNatal() {
       layer = document.createElement('div');
       layer.id = 'neveLayer';
       document.body.appendChild(layer);
-      // chuva inicial para a tela já nascer natalina
+      // chuva inicial para a tela jÃ¡ nascer natalina
       for (let i = 0; i < 14; i++) setTimeout(nevar, i * 90);
       neveTimer = setInterval(nevar, 240);
     }
@@ -983,7 +990,7 @@ function renderNatal() {
       gift.id = 'btnPresente';
       gift.type = 'button';
       gift.setAttribute('aria-label', 'Presente de Natal');
-      gift.textContent = '🎁';
+      gift.textContent = 'ðŸŽ';
       gift.onclick = abrirPresente;
       document.body.appendChild(gift);
       faiscaTimer = setInterval(faiscar, 750);
@@ -1002,13 +1009,13 @@ function nevar() {
   const depth = Math.random();
   const sorte = Math.random();
   let ch, base;
-  if (sorte < 0.58) { ch = '❄'; base = 9; }
-  else if (sorte < 0.70) { ch = '❅'; base = 9; }
-  else if (sorte < 0.78) { ch = '🎄'; base = 15; }
-  else if (sorte < 0.85) { ch = '⭐'; base = 12; }
-  else if (sorte < 0.91) { ch = '🔔'; base = 12; }
-  else if (sorte < 0.96) { ch = '🎅'; base = 14; }
-  else { ch = '✨'; base = 12; }
+  if (sorte < 0.58) { ch = 'â„'; base = 9; }
+  else if (sorte < 0.70) { ch = 'â…'; base = 9; }
+  else if (sorte < 0.78) { ch = 'ðŸŽ„'; base = 15; }
+  else if (sorte < 0.85) { ch = 'â­'; base = 12; }
+  else if (sorte < 0.91) { ch = 'ðŸ””'; base = 12; }
+  else if (sorte < 0.96) { ch = 'ðŸŽ…'; base = 14; }
+  else { ch = 'âœ¨'; base = 12; }
   const f = document.createElement('span');
   f.className = 'floco';
   f.textContent = ch;
@@ -1023,13 +1030,13 @@ function nevar() {
   setTimeout(() => f.remove(), (dur + 1) * 1000);
 }
 
-// faísca subindo do presente
+// faÃ­sca subindo do presente
 function faiscar() {
   const gift = document.getElementById('btnPresente');
   if (!gift) return;
   const s = document.createElement('span');
   s.className = 'faisca';
-  s.textContent = Math.random() < 0.7 ? '✨' : '⭐';
+  s.textContent = Math.random() < 0.7 ? 'âœ¨' : 'â­';
   s.style.left = (8 + Math.random() * 58) + 'px';
   s.style.bottom = (46 + Math.random() * 42) + 'px';
   s.style.fontSize = (10 + Math.random() * 10) + 'px';
@@ -1066,13 +1073,13 @@ function abrirPresente() {
   fundo.className = 'modal';
   fundo.innerHTML = `
     <div class="modal-card" style="text-align:center">
-      <div style="font-size:64px;line-height:1" id="presenteEmoji">🎁</div>
+      <div style="font-size:64px;line-height:1" id="presenteEmoji">ðŸŽ</div>
       <h2 style="margin-top:10px">Feliz Natal!</h2>
-      <p class="muted" style="margin-top:6px">A <b>Barbearia do Jota</b> deseja um Natal cheio de paz, saúde<br>e o corte sempre no ponto. 🎄✨</p>
-      <button id="btnFecharNatal" class="btn btn-gold btn-block" style="margin-top:14px">🎄 Fechar</button>
+      <p class="muted" style="margin-top:6px">A <b>Barbearia do Jota</b> deseja um Natal cheio de paz, saÃºde<br>e o corte sempre no ponto. ðŸŽ„âœ¨</p>
+      <button id="btnFecharNatal" class="btn btn-gold btn-block" style="margin-top:14px">ðŸŽ„ Fechar</button>
     </div>`;
   document.body.appendChild(fundo);
-  // confete também de cima da caixinha do modal
+  // confete tambÃ©m de cima da caixinha do modal
   setTimeout(() => {
     const m = fundo.querySelector('.modal-card');
     if (m) { const mr = m.getBoundingClientRect(); explodirConfete(mr.left + mr.width / 2, mr.top + 30); }
@@ -1107,7 +1114,7 @@ async function conferirPagamento() {
       pixBooking = updateBooking(pixBooking.id, { pixStatus: 'pago', status: 'confirmado' });
       pararConferencia();
       renderPixArea();
-      toast('✅ Pagamento confirmado! Pode enviar no WhatsApp.');
+      toast('âœ… Pagamento confirmado! Pode enviar no WhatsApp.');
       return;
     }
     if (r && r.ambiguo) {
@@ -1140,7 +1147,7 @@ function renderPixArea() {
   const pago = b.pixStatus === 'pago';
 
   $('pixText2').textContent =
-    `Sinal de ${BRL(signal)} — ${b.serviceName} · ${b.dateLabel} às ${b.time}`;
+    `Sinal de ${BRL(signal)} â€” ${b.serviceName} Â· ${b.dateLabel} Ã s ${b.time}`;
   $('pixValor').textContent = BRL(signal);
 
   if (pago) {
@@ -1148,7 +1155,7 @@ function renderPixArea() {
     $('pixGerando').classList.add('hidden');
     $('pixPronto').classList.remove('hidden');
     $('pixOffline').classList.add('hidden');
-    $('pixEspera').innerHTML = '✅ <b>Pagamento confirmado pela InfinitePay</b>';
+    $('pixEspera').innerHTML = 'âœ… <b>Pagamento confirmado pela InfinitePay</b>';
     $('btnPagarAgora').classList.add('hidden');
     if ($('btnJaPaguei')) $('btnJaPaguei').classList.add('hidden');
     $('pixCode').value = 'PAGAMENTO CONFIRMADO';
@@ -1165,7 +1172,7 @@ function renderPixArea() {
     showFloatWpp(b);
   } else {
     $('pixResultadoTexto').textContent =
-      'Assim que o Pix cair, esta tela muda sozinha e o botão do WhatsApp aparece.';
+      'Assim que o Pix cair, esta tela muda sozinha e o botÃ£o do WhatsApp aparece.';
   }
 }
 
@@ -1173,13 +1180,13 @@ function renderPixArea() {
 function renderAmbiguo(aviso) {
   $('pixGerando').classList.add('hidden');
   $('pixPronto').classList.add('hidden');
-  $('pixEspera').textContent = '⚠️ Não foi possível confirmar automaticamente.';
+  $('pixEspera').textContent = 'âš ï¸ NÃ£o foi possÃ­vel confirmar automaticamente.';
   const res = $('pixResultado');
   res.classList.remove('hidden');
   res.classList.remove('pagavel');
-  $('btnWppFinal').classList.remove('hidden');   // falar com a barbearia, não é confirmar
+  $('btnWppFinal').classList.remove('hidden');   // falar com a barbearia, nÃ£o Ã© confirmar
   $('pixResultadoTexto').textContent =
-    (aviso || 'Este link de pagamento já estava marcado como pago.')
+    (aviso || 'Este link de pagamento jÃ¡ estava marcado como pago.')
     + ' Fale com a barbearia pelo WhatsApp para confirmar o seu sinal.';
   showFloatWpp(pixBooking);
 }
@@ -1199,7 +1206,7 @@ function mostrarCobranca(url) {
   iniciarConferencia();
 }
 
-// ---------- QR grande em uma janela só ----------
+// ---------- QR grande em uma janela sÃ³ ----------
 function abrirQrGrande() {
   const url = $('pixCode').value;
   if (!url) return;
@@ -1214,9 +1221,9 @@ function qrDe(texto, tamanho) {
     + '&margin=6&data=' + encodeURIComponent(texto);
 }
 
-// ---------- backend fora do ar: o Pix continua funcionando na mão ----------
+// ---------- backend fora do ar: o Pix continua funcionando na mÃ£o ----------
 // copia e cola de VERDADE (Pix EMV com o valor do sinal travado na chave
-// da barbearia) + botão "Já paguei" que avisa no WhatsApp. Sem PC, funciona igual.
+// da barbearia) + botÃ£o "JÃ¡ paguei" que avisa no WhatsApp. Sem PC, funciona igual.
 function mostrarOffline(motivo) {
   pararConferencia();
   $('pixGerando').classList.add('hidden');
@@ -1227,18 +1234,18 @@ function mostrarOffline(motivo) {
   $('pixManual').classList.toggle('hidden', !payload);
   $('pixChaveManual').value = payload;
   $('pixOfflineMsg').innerHTML = payload
-    ? '<b>O conferimento automático do Pix está fora do ar neste momento.</b><br>'
-      + 'Você ainda pode pagar o sinal de <b>' + BRL(CONFIG.SIGNAL_VALUE) + '</b> agora mesmo: '
-      + 'toque em <b>Copiar</b> e cole no app do seu banco (ou aponte a câmera para o QR).<br><br>'
-      + 'Depois toque no botão <b>“✅ Já paguei — avisar a barbearia”</b>: abre o WhatsApp com o aviso pronto '
+    ? '<b>O conferimento automÃ¡tico do Pix estÃ¡ fora do ar neste momento.</b><br>'
+      + 'VocÃª ainda pode pagar o sinal de <b>' + BRL(CONFIG.SIGNAL_VALUE) + '</b> agora mesmo: '
+      + 'toque em <b>Copiar</b> e cole no app do seu banco (ou aponte a cÃ¢mera para o QR).<br><br>'
+      + 'Depois toque no botÃ£o <b>â€œâœ… JÃ¡ paguei â€” avisar a barbeariaâ€</b>: abre o WhatsApp com o aviso pronto '
       + 'e a barbearia confirma, garantindo sua vaga.'
-    : '<b>O conferimento automático do Pix está fora do ar agora.</b><br>'
+    : '<b>O conferimento automÃ¡tico do Pix estÃ¡ fora do ar agora.</b><br>'
       + 'Fale com a barbearia pelo WhatsApp para concluir seu agendamento.';
   showPixQr(payload);
   console.warn('[pix] backend indisponivel:', motivo);
 }
 
-// testa a conexão com o servidor e avisa no console o que achou
+// testa a conexÃ£o com o servidor e avisa no console o que achou
 async function checarServidor() {
   for (const base of servidores()) {
     try {
@@ -1253,7 +1260,7 @@ async function checarServidor() {
   return false;
 }
 
-// Cliente não pagou (ou desistiu): volta para a etapa 4 sem confirmar nada
+// Cliente nÃ£o pagou (ou desistiu): volta para a etapa 4 sem confirmar nada
 function clientNotPaid() {
   pararConferencia();
   showStep(4);
@@ -1296,7 +1303,7 @@ function limparEstadoPagamento() {
   window.scrollTo(0, 0);
 }
 
-// Botão flutuante que reaparece quando o cliente volta ao site
+// BotÃ£o flutuante que reaparece quando o cliente volta ao site
 function showFloatWpp(b) {
   const f = $('pixFloat');
   if (!f || !b) return;
@@ -1308,20 +1315,20 @@ function showFloatWpp(b) {
   f.classList.add('show');
 }
 
-// Cliente não pagou ainda
+// Cliente nÃ£o pagou ainda
 function clientNotPaid() {
   renderPixArea();
   toast('Tudo bem. Pague o Pix quando puder e volte aqui.');
 }
 
 // ===== quando volta ao site: reconfere o pagamento pendente =====
-// Só libera o WhatsApp depois que a InfinitePay confirmar. Nunca sozinho.
+// SÃ³ libera o WhatsApp depois que a InfinitePay confirmar. Nunca sozinho.
 function checkPixOnLoad() {
   const list = loadBookings();
   // so mostra o botao flutuante se houver pagamento CONFIRMADO
   const pago = list.find((b) => b.payMethod === 'pix' && b.pixStatus === 'pago');
   if (pago) { showFloatWpp(pago); return; }
-  // nao navega para a etapa 5 — o usuario comeca do zero
+  // nao navega para a etapa 5 â€” o usuario comeca do zero
 }
 
 // ===== GALERIA DE FOTOS (carrossel) =====
@@ -1332,7 +1339,7 @@ function initCarrossel() {
   const dots = $('carDots');
   if (!items.length) return;
 
-  // remove fotos que não existirem no servidor
+  // remove fotos que nÃ£o existirem no servidor
   items.forEach((fig) => {
     const img = fig.querySelector('img');
     img.addEventListener('error', () => {
@@ -1343,7 +1350,7 @@ function initCarrossel() {
 
   const validos = () => [...track.querySelectorAll('.car-item')];
 
-  // índice da foto que está mais centralizada
+  // Ã­ndice da foto que estÃ¡ mais centralizada
   const indiceAtual = () => {
     const list = validos();
     const centro = track.scrollLeft + track.clientWidth / 2;
@@ -1355,7 +1362,7 @@ function initCarrossel() {
     return melhor;
   };
 
-  // Rola SÓ o carrossel na horizontal — nunca mexe na rolagem da página
+  // Rola SÃ“ o carrossel na horizontal â€” nunca mexe na rolagem da pÃ¡gina
   const irPara = (i, suave = true) => {    const list = validos();
     if (!list.length) return;
     const el = list[Math.max(0, Math.min(list.length - 1, i))];
@@ -1377,7 +1384,7 @@ function initCarrossel() {
   // atualiza as bolinhas depois que a rolagem terminar (com ou sem evento de scroll)
   const agendarDots = () => { clearTimeout(dotsTimer); dotsTimer = setTimeout(paintDots, 120); };
 
-  // avanço automático: só enquanto a galeria estiver visível na tela
+  // avanÃ§o automÃ¡tico: sÃ³ enquanto a galeria estiver visÃ­vel na tela
   let timer = null;
   const estado = { visivel: false };
   const iniciarAuto = () => {
@@ -1414,7 +1421,7 @@ function initCarrossel() {
   paintDots();
 }
 
-// ===== CARTÃO "HORÁRIOS HOJE" (topo do site) =====
+// ===== CARTÃƒO "HORÃRIOS HOJE" (topo do site) =====
 const slotMinutesOf = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const OPEN_MIN = slotMinutesOf('09:00');
 const CLOSE_MIN = slotMinutesOf('21:00');
@@ -1434,7 +1441,7 @@ async function renderToday() {
   const fechaHoje = fechaAsLoja();
   const fechaTxt = fechaHoje === '00:00' ? '00:00 (meia-noite)' : fechaHoje;
   label.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
-    + ' · Aberto ' + abreHoje + '–' + fechaTxt;
+    + ' Â· Aberto ' + abreHoje + 'â€“' + fechaTxt;
 
   // o barbeiro forcou ABERTO: a loja esta aberta agora, mesmo fora do horario de sempre
   if (statusLoja.modo === 'manual' && statusLoja.aberto === true) {
@@ -1442,20 +1449,20 @@ async function renderToday() {
   const fechaHoje = fechaAsLoja();
   const fechaTxt = fechaHoje === '00:00' ? '00:00 (meia-noite)' : fechaHoje;
   label.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
-    + ' · Aberto ' + abreHoje + '–' + fechaTxt;
+    + ' Â· Aberto ' + abreHoje + 'â€“' + fechaTxt;
     const abreMA = minutosDe(abreAsLoja());
     let fechaMA = minutosDe(fechaAsLoja());
     if (fechaMA <= abreMA) fechaMA += 24 * 60;
     // quando o barbeiro ABRE na mao, os horarios que aparecem sao os da
     // janela de funcionamento (de abrir ate fechar), so os que ainda vao acontecer
     // quando o barbeiro ABRE na mao, mostra TODOS os horarios da janela
-    // (de abrir ate fechar), mesmo os que ja passaram — o barbeiro decidiu
+    // (de abrir ate fechar), mesmo os que ja passaram â€” o barbeiro decidiu
     const futurasAberto = TIME_SLOTS.filter((t) => {
       const m = slotMinutesOf(t);
       return m >= abreMA && m <= fechaMA;
     });
     if (!futurasAberto.length) {
-      box.innerHTML = '<span class="open-big">🟢 Aberto</span><p class="tiny">Acabaram as vagas de hoje — amanhã abre às ' + abreAsLoja() + '</p>';
+      box.innerHTML = '<span class="open-big">ðŸŸ¢ Aberto</span><p class="tiny">Acabaram as vagas de hoje â€” amanhÃ£ abre Ã s ' + abreAsLoja() + '</p>';
       return;
     }
     const listA = await loadBookings();
@@ -1470,12 +1477,12 @@ async function renderToday() {
       showStep(3);
       renderTimes();
       renderResume();
-      toast(`Horário ${el.dataset.t} selecionado.`);
+      toast(`HorÃ¡rio ${el.dataset.t} selecionado.`);
     }));
     return;
   }
   if (now.getDay() === CONFIG.CLOSED_WEEKDAY) {
-    box.innerHTML = '<span class="closed-big">🔴 Fechado hoje</span><p class="tiny">Voltamos amanhã às 09:00</p>';
+    box.innerHTML = '<span class="closed-big">ðŸ”´ Fechado hoje</span><p class="tiny">Voltamos amanhÃ£ Ã s 09:00</p>';
     return;
   }
   const abreM = minutosDe(abreAsLoja());
@@ -1487,11 +1494,11 @@ async function renderToday() {
     ? (mins >= abreM || mins <= (fechaM - 24 * 60))
     : (mins >= abreM && mins <= fechaM);
   if (!abertoAgora && mins < abreM) {
-    box.innerHTML = `<span class="closed-big">🔴 Abre às ${abreAsLoja()}</span><p class="tiny">Volte em ${Math.floor((abreM - mins) / 60)}h${String((abreM - mins) % 60).padStart(2, '0')}</p>`;
+    box.innerHTML = `<span class="closed-big">ðŸ”´ Abre Ã s ${abreAsLoja()}</span><p class="tiny">Volte em ${Math.floor((abreM - mins) / 60)}h${String((abreM - mins) % 60).padStart(2, '0')}</p>`;
     return;
   }
   if (!abertoAgora) {
-    box.innerHTML = `<span class="closed-big">🔴 Encerrado</span><p class="tiny">Voltamos amanhã às ${abreAsLoja()}</p>`;
+    box.innerHTML = `<span class="closed-big">ðŸ”´ Encerrado</span><p class="tiny">Voltamos amanhÃ£ Ã s ${abreAsLoja()}</p>`;
     return;
   }
 
@@ -1502,7 +1509,7 @@ async function renderToday() {
     return m > mins && m >= abreM && m <= fechaM;
   });
   if (!futuras.length) {
-    box.innerHTML = '<span class="closed-big">🔴 Encerrado</span><p class="tiny">Sem mais vagas hoje</p>';
+    box.innerHTML = '<span class="closed-big">ðŸ”´ Encerrado</span><p class="tiny">Sem mais vagas hoje</p>';
     return;
   }
   const list = await loadBookings();
@@ -1517,7 +1524,7 @@ async function renderToday() {
     showStep(3);
     renderTimes();
     renderResume();
-    toast(`Horário ${el.dataset.t} selecionado.`);
+    toast(`HorÃ¡rio ${el.dataset.t} selecionado.`);
   }));
 }
 document.querySelectorAll('.payopt').forEach((el) =>
@@ -1546,8 +1553,8 @@ $('btnNextPix').onclick = generatePixBooking;
 $('btnCopiarChave').onclick = async () => {
   const chave = $('pixChaveManual').value;
   if (!chave) return;
-  try { await navigator.clipboard.writeText(chave); toast('Código Pix copiado!'); }
-  catch { $('pixChaveManual').select(); toast('Segure e copie o código Pix.'); }
+  try { await navigator.clipboard.writeText(chave); toast('CÃ³digo Pix copiado!'); }
+  catch { $('pixChaveManual').select(); toast('Segure e copie o cÃ³digo Pix.'); }
 };
 
 // "Ja paguei o Pix": abre o WhatsApp com o aviso pronto para a barbearia
@@ -1555,10 +1562,10 @@ function jaPagueiAvisar() {
   const b = pixBooking;
   if (!b) { toast('Complete o agendamento primeiro.'); return; }
   const msg = [
-    `Oi! Já paguei o sinal de ${BRL(signalOf(b.price))} via Pix.`,
-    `Meu agendamento: ${b.serviceName} — ${b.dateLabel} às ${b.time}.`,
+    `Oi! JÃ¡ paguei o sinal de ${BRL(signalOf(b.price))} via Pix.`,
+    `Meu agendamento: ${b.serviceName} â€” ${b.dateLabel} Ã s ${b.time}.`,
     `Nome: ${b.clientName}`,
-    `Código da reserva: ${b.id}`,
+    `CÃ³digo da reserva: ${b.id}`,
   ].join('\n');
   const wpp = `https://wa.me/${String(CONFIG.BARBER_WHATSAPP).replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
   try { window.open(wpp, '_blank', 'noopener'); } catch { location.href = wpp; }
@@ -1568,7 +1575,7 @@ $('btnJaPaguei').onclick = jaPagueiAvisar;
 $('btnAvisarPago').onclick = jaPagueiAvisar;
 $('btnCopyPix').onclick = async () => {
   const code = $('pixCode').value;
-  if (!code) return toast('Sem código para copiar.');
+  if (!code) return toast('Sem cÃ³digo para copiar.');
   try { await navigator.clipboard.writeText(code); toast('Link de pagamento copiado!'); }
   catch { $('pixCode').select(); toast('Segure e copie o link.'); }
 };
@@ -1587,7 +1594,7 @@ $('btnWppFinal').onclick = () => {
   }
   $('btnWppFinal').classList.add('hidden');
 };
-$('btnFalarBarbearia').href = `https://wa.me/${String(CONFIG.BARBER_WHATSAPP).replace(/\D/g, '')}?text=${encodeURIComponent('Olá! Preciso de ajuda com um agendamento.')}`;
+$('btnFalarBarbearia').href = `https://wa.me/${String(CONFIG.BARBER_WHATSAPP).replace(/\D/g, '')}?text=${encodeURIComponent('OlÃ¡! Preciso de ajuda com um agendamento.')}`;
 $('btnAjustes').onclick = abrirAjustes;
 $('btnFecharAjustes').onclick = fecharAjustes;
 // modo tecnico removido - nao aparece mais nada de servidor ou repositorio
@@ -1598,29 +1605,29 @@ $('btnVerificarUpdate').onclick = async () => {
   $('modalAjustes').classList.add('hidden');
   const achou = await checarAtualizacao({ silencioso: false });
   if (achou) {
-    $('updStatus').textContent = `Atualização ${achou} disponível!`;
+    $('updStatus').textContent = `AtualizaÃ§Ã£o ${achou} disponÃ­vel!`;
   } else if (document.getElementById('modalUpdate').classList.contains('hidden')) {
-    $('updStatus').textContent = `Você está na versão mais recente (${CONFIG.APP_VERSION}).`;
+    $('updStatus').textContent = `VocÃª estÃ¡ na versÃ£o mais recente (${CONFIG.APP_VERSION}).`;
     // reabre os ajustes para mostrar o resultado
     $('modalAjustes').classList.remove('hidden');
   } else {
-    $('updStatus').textContent = 'Atualização disponível!';
+    $('updStatus').textContent = 'AtualizaÃ§Ã£o disponÃ­vel!';
   }
 };
 
-// modo forçado: não precisa de botão na tela (use o [FORCAR] nas notas da release)
+// modo forÃ§ado: nÃ£o precisa de botÃ£o na tela (use o [FORCAR] nas notas da release)
 // (o botao btnForcarUpdate foi removido do HTML)
 $('btnVerQr').onclick = abrirQrGrande;
 $('btnFecharQr').onclick = () => $('modalQr').classList.add('hidden');
 
 // parceria
 $('btnParceria').onclick = () => {
-  $('btnWppParceria').href = `https://wa.me/5521980204832?text=${encodeURIComponent('Olá! Vim do aplicativo da Barbearia do Jota.')}`;
+  $('btnWppParceria').href = `https://wa.me/5521980204832?text=${encodeURIComponent('OlÃ¡! Vim do aplicativo da Barbearia do Jota.')}`;
   $('modalParceria').classList.remove('hidden');
 };
 $('btnFecharParceria').onclick = () => $('modalParceria').classList.add('hidden');
 
-// modo tecnico removido — nada de servidor/repositorio na tela
+// modo tecnico removido â€” nada de servidor/repositorio na tela
 document.querySelectorAll('.payopt').forEach((el) => el.onclick = () => { payMethod = el.dataset.pay; renderPay(); renderResume(); });
 $('calPrev').onclick = () => shiftMonth(-1);
 $('calNext').onclick = () => shiftMonth(1);
@@ -1632,21 +1639,21 @@ $('calNext').onclick = () => shiftMonth(1);
     renderResume();
   });
 });
-$('locAddress').textContent = `${CONFIG.BARBER_ADDRESS} · Ter–Dom 09h–21h · Seg fechada`;
+$('locAddress').textContent = `${CONFIG.BARBER_ADDRESS} Â· Terâ€“Dom 09hâ€“21h Â· Seg fechada`;
 $('aboutText').textContent = CONFIG.ABOUT;
-$('aboutHours').textContent = `📍 ${CONFIG.BARBER_ADDRESS} · ⏰ Ter–Dom 09h–21h · Seg fechada`;
+$('aboutHours').textContent = `ðŸ“ ${CONFIG.BARBER_ADDRESS} Â· â° Terâ€“Dom 09hâ€“21h Â· Seg fechada`;
 const btnMaps = document.getElementById('btnMaps');
 if (btnMaps) {
   btnMaps.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(`${CONFIG.BARBER_NAME} ${CONFIG.BARBER_ADDRESS}`);
 }
-// links "Agendar" vão direto para a barra de etapas (sem pular pro meio da página)
+// links "Agendar" vÃ£o direto para a barra de etapas (sem pular pro meio da pÃ¡gina)
 document.querySelectorAll('a[href="#servicos"]').forEach((a) => {
   a.addEventListener('click', (e) => { e.preventDefault(); showStep(1); });
 });
 // ===== tarja do topo =====
-// No APK, o Android às vezes desenha o site por baixo da barra de notificação
-// e o navegador não avisa a altura. Quando isso acontece reservamos um mínimo,
-// senão o logo e o menu ficam escondidos atrás dos ícones do celular.
+// No APK, o Android Ã s vezes desenha o site por baixo da barra de notificaÃ§Ã£o
+// e o navegador nÃ£o avisa a altura. Quando isso acontece reservamos um mÃ­nimo,
+// senÃ£o o logo e o menu ficam escondidos atrÃ¡s dos Ã­cones do celular.
 function ajustarTarjaDoTopo() {
   const ehApk = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   if (!ehApk) return;
@@ -1661,7 +1668,7 @@ function ajustarTarjaDoTopo() {
 window.addEventListener('load', () => {
   window.scrollTo(0, 0);
   ajustarTarjaDoTopo();
-  // botões "Reservar horário" / "Agendar agora" descem SUAVE até a etapa do corte
+  // botÃµes "Reservar horÃ¡rio" / "Agendar agora" descem SUAVE atÃ© a etapa do corte
   document.querySelectorAll('a[href="#servicos"]').forEach((a) => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1715,6 +1722,6 @@ window.addEventListener('load', () => {
 });
 window.addEventListener('resize', ajustarTarjaDoTopo);
 window.addEventListener('orientationchange', ajustarTarjaDoTopo);
-// mantém o card do topo e os horários frescos se a aba ficar aberta
+// mantÃ©m o card do topo e os horÃ¡rios frescos se a aba ficar aberta
 setInterval(() => { renderToday(); }, 60000);
-document.title = `${CONFIG.BARBER_NAME} — Agendamento Online`;
+document.title = `${CONFIG.BARBER_NAME} â€” Agendamento Online`;
