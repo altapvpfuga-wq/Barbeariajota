@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.23',
+  APP_VERSION: '1.0.24',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -910,7 +910,7 @@ async function carregarStatusLoja() {
     }
   } catch { /* PC desligado — o canal da internet cobre */ }
 }
-const minutosDe = (t) => { const [h, m] = String(t || '').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const minutosDe = (t) => { const s = String(t || '').trim(); if (s === '00:00') return 24 * 60; const [h, m] = s.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
 const abreAsLoja = () => statusLoja.ok ? (statusLoja.abreAs || '09:00') : '09:00';
 const fechaAsLoja = () => statusLoja.ok ? (statusLoja.fechaAs || '21:00') : '21:00';
 

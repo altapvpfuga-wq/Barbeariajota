@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.23',
+  APP_VERSION: '1.0.24',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -46,7 +46,7 @@ const LS_ST = 'painel_status_v1';          // ultimo status aberto/fechado
 
 const $ = (id) => document.getElementById(id);
 const BRL = (v) => 'R$ ' + Number(v || 0).toFixed(2).replace('.', ',');
-const minutosDe = (t) => { const [h, m] = String(t || '09:00').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const minutosDe = (t) => { const s = String(t || '09:00').trim(); if (s === '00:00') return 24 * 60; const [h, m] = s.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
 
 // ---------- chamada ao servidor do PC (opcional) ----------
 let apiBaseAtual = null;
@@ -163,6 +163,10 @@ $('mAberto').onclick = () => mandarStatus({ modo: 'manual', aberto: true });
 $('mFechado').onclick = () => mandarStatus({ modo: 'manual', aberto: false });
 $('mAuto').onclick = () => mandarStatus({ modo: 'auto' });
 $('btnSalvarHoras').onclick = () => mandarStatus({ abreAs: $('inpAbre').value, fechaAs: $('inpFecha').value });
+if ($('btnMeiaNoite')) $('btnMeiaNoite').onclick = () => {
+  $('inpFecha').value = '00:00';
+  toast('Fechamento definido para meia-noite. Toque em 💾 Salvar.');
+};
 
 // ============================================================
 //  2. AGENDAMENTOS (salvos no aparelho — nada se perde)
