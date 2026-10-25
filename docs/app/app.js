@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.24',
+  APP_VERSION: '1.0.25',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -270,16 +270,32 @@ async function renderTimes() {
   const isToday = dayKey === tkey;
   const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 99999;
   // o barbeiro forcou o fechamento pelo painel
-  if (statusLoja.modo === 'manual' && statusLoja.aberto === false) {
-    box.innerHTML = '<span class="tiny">🔴 A barbearia está fechada agora. Volte em outro horário!</span>';
-    const hint0 = $('busyHint');
-    if (hint0) hint0.textContent = '';
+  const fechadoAgora = statusLoja.modo === 'manual' && statusLoja.aberto === false;
+  if (fechadoAgora && isToday) {
+    // a loja esta fechada AGORA: os horarios do dia de hoje aparecem em
+    // VERMELHO (nao da para marcar), mas os outros dias ficam normais
+    const abreM2 = minutosDe(abreAsLoja());
+    let fechaM2 = minutosDe(fechaAsLoja());
+    if (fechaM2 <= abreM2) fechaM2 += 24 * 60;
+    box.innerHTML = TIME_SLOTS.map((t) => {
+      const [h, m] = t.split(':').map(Number);
+      const slotMinutes = h * 60 + m;
+      if (slotMinutes < abreM2 || slotMinutes > fechaM2) return '';
+      return `<button class="slot busy" disabled>${t}</button>`;
+    }).join('');
+    const hintF = $('busyHint');
+    if (hintF) hintF.textContent = '🔴 A barbearia está fechada agora — não é possível agendar hoje.';
     return;
+  }
+  if (fechadoAgora && !isToday) {
+    // fechado agora, mas outro dia: mostra normal (a loja pode abrir de novo)
   }
   // o barbeiro forcou ABERTO: hoje o horario da janela nao bloqueia (só vence o que passou)
   const forcouAberto = isToday && statusLoja.modo === 'manual' && statusLoja.aberto === true;
   const abreM = minutosDe(abreAsLoja());
-  const fechaM = minutosDe(fechaAsLoja());
+  let fechaM = minutosDe(fechaAsLoja());
+  // fecha no dia seguinte (ex.: 09:00 às 03:00 ou 00:00 = até meia-noite)
+  if (fechaM <= abreM) fechaM += 24 * 60;
   const list = await loadBookings();
   box.innerHTML = TIME_SLOTS.map((t) => {
     const [h, m] = t.split(':').map(Number);
@@ -1429,12 +1445,18 @@ async function renderToday() {
     return;
   }
   const abreM = minutosDe(abreAsLoja());
-  const fechaM = minutosDe(fechaAsLoja());
-  if (mins < abreM) {
+  let fechaM = minutosDe(fechaAsLoja());
+  const fechaNoDiaSeguinte = fechaM <= abreM;
+  if (fechaNoDiaSeguinte) fechaM += 24 * 60;
+  // aberto agora? (considera virada de dia)
+  const abertoAgora = fechaNoDiaSeguinte
+    ? (mins >= abreM || mins <= (fechaM - 24 * 60))
+    : (mins >= abreM && mins <= fechaM);
+  if (!abertoAgora && mins < abreM) {
     box.innerHTML = `<span class="closed-big">🔴 Abre às ${abreAsLoja()}</span><p class="tiny">Volte em ${Math.floor((abreM - mins) / 60)}h${String((abreM - mins) % 60).padStart(2, '0')}</p>`;
     return;
   }
-  if (mins > fechaM) {
+  if (!abertoAgora) {
     box.innerHTML = `<span class="closed-big">🔴 Encerrado</span><p class="tiny">Voltamos amanhã às ${abreAsLoja()}</p>`;
     return;
   }
