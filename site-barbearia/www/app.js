@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.30',
+  APP_VERSION: '1.0.31',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -283,6 +283,8 @@ async function renderTimes() {
       + '<p class="tiny">Sua melhor versão começa com um bom corte! 🚀💈</p>';
     const hintF = $('busyHint');
     if (hintF) hintF.textContent = '🔴 Fechado agora — não é possível agendar hoje.';
+    const btnR = $('btnReservarHoje');
+    if (btnR) btnR.style.display = 'none';
     return;
   }
   if (fechadoAgora && !isToday) {
@@ -822,14 +824,13 @@ let statusLoja = ((tem) => {
 
 // aplica o status novo e redesenha a loja na hora
 function aplicarStatusLoja(s) {
-  // evita re-render se for identico (mas sempre aplica se os horarios mudaram)
-  const horasMudaram = (s.abreAs && s.abreAs !== statusLoja.abreAs)
-    || (s.fechaAs && s.fechaAs !== statusLoja.fechaAs)
-    || (s.modo && s.modo !== statusLoja.modo)
-    || (s.aberto !== undefined && s.aberto !== statusLoja.aberto);
-  const tsNovo = Number(s.ts) || 0;
-  const tsAtual = Number(statusLoja.ts) || 0;
-  if (!horasMudaram && tsNovo <= tsAtual && statusLoja.ok) return;
+  // aplica se QUALQUER campo mudou (modo, aberto, abreAs, fechaAs) —
+  // sem depender de timestamp (que falha com relógio desregulado)
+  const mudou = (s.modo && s.modo !== statusLoja.modo)
+    || (s.aberto !== undefined && s.aberto !== statusLoja.aberto)
+    || (s.abreAs && s.abreAs !== statusLoja.abreAs)
+    || (s.fechaAs && s.fechaAs !== statusLoja.fechaAs);
+  if (!mudou && statusLoja.ok) return;   // nada novo — nao re-renderiza
   statusLoja = { ...s, ok: true };
   try { localStorage.setItem('barbearia_status_loja_v1', JSON.stringify(statusLoja)); } catch { /* ignora */ }
   renderToday();
@@ -853,7 +854,7 @@ async function processarCanal(texto) {
       || (p.s.fechaAs && p.s.fechaAs !== statusLoja.fechaAs)
       || (p.s.modo && p.s.modo !== statusLoja.modo)
       || (p.s.aberto !== undefined && p.s.aberto !== statusLoja.aberto);
-    if (horasMudaram || tsNovo > tsAtual) aplicarStatusLoja(p.s);
+    if (horasMudaram) aplicarStatusLoja(p.s);   // aplica se QUALQUER campo mudou (sem depender de timestamp)
     } else if (p && p.t === 'e' && p.b && p.b.id) {
       // a barbearia EDITOU o agendamento (dia/hora/etc): atualiza aqui na hora
       const atual = loadBookings().find((b) => b.id === p.b.id);
@@ -919,13 +920,17 @@ async function carregarStatusLoja() {
     const resp = await fetch(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}/json?poll=1&since=12h`);
     await processarCanal(await resp.text());
   } catch { /* sem internet — usa o que ja tenho em casa */ }
-  // reforco: se o PC estiver ligado, confere o status central (horarios definidos
-  // no Painel aparecem aqui mesmo se o canal da internet falhar)
+  // reforco: se o PC estiver ligado, confere o status central — mas SO se o
+  // cliente nao tiver um status recente (evita sobrescrever "fechado" manual
+  // com uma copia velha do servidor — esse era o bug de "abre sozinho")
   try {
     const r2 = await chamarApi('/api/status');
     if (r2 && (r2.modo === 'auto' || r2.modo === 'manual')) {
       const ts2 = Date.parse(r2.atualizadoEm) || 0;
-      if (ts2 > (Number(statusLoja.ts) || 0)) {
+      const tsAtual = Number(statusLoja.ts) || 0;
+      const clientRecente = statusLoja.ok && (Date.now() - tsAtual < 5 * 60 * 1000);
+      // so aplica se: cliente sem status, OU servidor genuinamente mais recente (>5 min)
+      if (!clientRecente || ts2 > tsAtual + 5 * 60 * 1000) {
         aplicarStatusLoja({
           modo: r2.modo,
           aberto: r2.modo === 'manual' ? !!r2.aberto : null,
@@ -933,7 +938,7 @@ async function carregarStatusLoja() {
           fechaAs: r2.fechaAs,
           neve: !!r2.neve,
           presente: !!r2.presente,
-          ts: ts2,
+          ts: ts2 || Date.now(),
         });
       }
     }
@@ -1418,6 +1423,9 @@ async function renderToday() {
   const label = $('todayLabel');
   const box = $('todaySlots');
   if (!label || !box) return;
+  // botao "Reservar horario" visivel por padrao (some quando fechado)
+  const btnReservar = $('btnReservarHoje');
+  if (btnReservar) btnReservar.style.display = '';
   const now = new Date();
   const hojeKey = toKey(now.getFullYear(), now.getMonth(), now.getDate());
   const mins = now.getHours() * 60 + now.getMinutes();
