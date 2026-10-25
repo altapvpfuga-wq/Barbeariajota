@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.29',
+  APP_VERSION: '1.0.30',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -270,7 +270,7 @@ async function renderTimes() {
   const isToday = dayKey === tkey;
   const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 99999;
   // o barbeiro forcou o fechamento pelo painel
-  const fechadoAgora = statusLoja.modo === 'manual' && statusLoja.aberto === false;
+  const fechadoAgora = statusLoja.modo === 'manual' && statusLoja.aberto !== true;
   if (fechadoAgora && isToday) {
     const abreTxt = abreAsLoja();
     const fechaTxt = fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja();
@@ -851,7 +851,8 @@ async function processarCanal(texto) {
     const tsAtual = Number(statusLoja.ts) || 0;
     const horasMudaram = (p.s.abreAs && p.s.abreAs !== statusLoja.abreAs)
       || (p.s.fechaAs && p.s.fechaAs !== statusLoja.fechaAs)
-      || (p.s.modo && p.s.modo !== statusLoja.modo);
+      || (p.s.modo && p.s.modo !== statusLoja.modo)
+      || (p.s.aberto !== undefined && p.s.aberto !== statusLoja.aberto);
     if (horasMudaram || tsNovo > tsAtual) aplicarStatusLoja(p.s);
     } else if (p && p.t === 'e' && p.b && p.b.id) {
       // a barbearia EDITOU o agendamento (dia/hora/etc): atualiza aqui na hora
