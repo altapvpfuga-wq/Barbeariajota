@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.38',
+  APP_VERSION: '1.0.39',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -35,7 +35,19 @@ const CONFIG = {
 // Canal DIRETO entre o app do cliente e este Painel (ntfy — grátis).
 // TEM que ser o MESMO nome nos dois apps. Trocar aqui = trocar lá também.
 CONFIG.NTFY_URL = 'https://ntfy.sh';
+// canal RESERVA: se o principal ficar fora do ar ou estourar o limite
+// diario de mensagens, tudo continua funcionando por aqui.
+CONFIG.NTFY_URL_RESERVA = 'https://ntfy.envs.net';
 CONFIG.NTFY_TOPIC = 'bjota-ag-7k2m9xI';
+
+// Enderecos do canal (principal + reserva), sem repetir.
+function canaisNtfy() {
+  const lista = [CONFIG.NTFY_URL];
+  if (CONFIG.NTFY_URL_RESERVA && !lista.includes(CONFIG.NTFY_URL_RESERVA)) {
+    lista.push(CONFIG.NTFY_URL_RESERVA);
+  }
+  return lista.filter(Boolean);
+}
 
 const LS_SRV = 'painel_servidor_v1';
 const LS_PIN = 'painel_pin_v1';
@@ -139,6 +151,7 @@ function pintarStatus() {
 // (se estiver ligado) avisa o servidor do PC tambem
 async function mandarStatus(corpo) {
   statusLoja = {
+    ...statusLoja,
     modo: corpo.modo || statusLoja.modo,
     aberto: corpo.aberto === undefined ? statusLoja.aberto : !!corpo.aberto,
     abreAs: corpo.abreAs || statusLoja.abreAs || '09:00',
@@ -148,6 +161,7 @@ async function mandarStatus(corpo) {
   try { localStorage.setItem(LS_ST, JSON.stringify(statusLoja)); } catch { /* ignora */ }
   pintarStatus();
   publicarCanal({ t: 's', s: statusLoja });   // <- chega NO HORA no app do cliente
+  ultimoStatusEnviado = Date.now();
   try {
     await chamarApi('/api/painel/status', {
       method: 'POST',
@@ -159,6 +173,9 @@ async function mandarStatus(corpo) {
         aberto: statusLoja.aberto,
         abreAs: statusLoja.abreAs,
         fechaAs: statusLoja.fechaAs,
+        neve: !!statusLoja.neve,
+        presente: !!statusLoja.presente,
+        ts: statusLoja.ts,
       }),
     });
     toast('✅ Salvo! O site já atualizou.');
@@ -325,28 +342,54 @@ function pintarLista() {
 // ============================================================
 //  CANAL DIRETO ntfy — agendamentos entram SOZINHOS aqui
 // ============================================================
-let sse = null;
+let sseLista = [];
 let canalOk = false;
 let anunciouStatus = false;
+let ultimoStatusEnviado = 0;
 // so publica a lista de ocupados depois de recuperar o que chegou com o app fechado
 // (senao uma lista vazia/parcial poderia "liberar" horarios que ja estao reservados)
 let backlogOk = false;
 // e so depois de tentar juntar os agendamentos que estao no PC
 let servidorTentou = false;
 
-function publicarCanal(corpo) {
-  try {
-    fetch(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(corpo),
-    }).catch(() => {});
-  } catch { /* ignora */ }
+// publica no canal principal E no reserva. Basta um aceitar.
+// Retorna true se pelo menos um recebeu (usado para nao repetir a lista a toa).
+async function publicarCanal(corpo) {
+  const texto = JSON.stringify(corpo);
+  let algumOk = false;
+  await Promise.all(canaisNtfy().map(async (base) => {
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      try {
+        const r = await fetch(`${base}/${CONFIG.NTFY_TOPIC}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: texto,
+        });
+        if (r.ok) { algumOk = true; return; }
+        // 429 = limite diario do servidor: nao adianta insistir agora
+        if (r.status === 429) return;
+      } catch { /* sem internet agora — tenta de novo uma vez */ }
+      if (tentativa === 0) await new Promise((ok) => setTimeout(ok, 1200));
+    }
+  }));
+  return algumOk;
 }
 
 // avisa os apps dos clientes QUAIS horarios ja estao reservados.
 // Sai daqui SO id + dia + hora (nenhum nome ou telefone).
-function publicarOcupados() {
+// IMPORTANTE: so publica quando a lista MUDA. Antes ele repetia a lista
+// a cada minuto e estourava o limite diario do ntfy (250 mensagens),
+// fazendo os botoes de Neve/Presente pararem de funcionar.
+let ultimaOcupacaoPublicada = '';
+let ocupacaoInicialOk = false;
+let publicandoOcupados = false;
+
+function assinaturaOcupados(lista) {
+  return lista.map((x) => `${x.id}|${x.dateKey}|${x.time}`).sort().join(',');
+}
+
+async function publicarOcupados({ forcar = false } = {}) {
+  if (publicandoOcupados) return false;
   try {
     const hoje = new Date();
     const chaveHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
@@ -355,46 +398,67 @@ function publicarOcupados() {
         && b.dateKey >= chaveHoje
         && b.status !== 'cancelado' && b.status !== 'expirado')
       .map((b) => ({ id: b.id, dateKey: b.dateKey, time: b.time }));
-    publicarCanal({ t: 'o', o: lista, completo: true });
-  } catch { /* ignora */ }
+    const assinatura = assinaturaOcupados(lista);
+    if (!forcar && assinatura === ultimaOcupacaoPublicada) return true;
+    publicandoOcupados = true;
+    const ok = await publicarCanal({ t: 'o', o: lista, completo: true, ts: Date.now() });
+    if (ok) ultimaOcupacaoPublicada = assinatura;
+    return ok;
+  } catch {
+    return false;
+  } finally {
+    publicandoOcupados = false;
+  }
 }
 // a lista so sai quando o Painel ja recuperou tudo (canal + PC)
-function talvezPublicarOcupados() {
+async function talvezPublicarOcupados() {
   if (!backlogOk || !servidorTentou) return;
-  publicarOcupados();
+  const forcar = !ocupacaoInicialOk;   // primeira vez manda mesmo sem mudanca
+  const ok = await publicarOcupados({ forcar });
+  if (ok) ocupacaoInicialOk = true;
 }
 
 function ligarCanal() {
-  try { if (sse) sse.close(); } catch { /* nada */ }
-  try {
-    sse = new EventSource(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}/sse`);
-    sse.onopen = () => {
-      canalOk = true;
-      const aviso = $('stAviso');
-      // ao abrir o canal, avisa os clientes "sou eu, o status atual e este"
-      if (!anunciouStatus && statusLoja.ts) {
-        anunciouStatus = true;
-        setTimeout(() => publicarCanal({ t: 's', s: statusLoja }), 900);
-      }
-      // manda a ocupacao para quem ja esta com o app aberto
-      setTimeout(talvezPublicarOcupados, 1300);
-      if (aviso && !aviso.textContent) pintarStatus();
-    };
-    sse.onerror = () => { canalOk = false; };
-    sse.onmessage = (ev) => {
-      let m = null, p = null;
-      try { m = JSON.parse(ev.data); if (m.event !== 'message' || !m.message) return; } catch { return; }
-      try { p = JSON.parse(m.message); } catch { return; }
-      if (p.t === 'b' && p.b) registrar(p.b, { avisaNovo: true });        // agendamento novo do app do cliente
-      else if (p.t === 'p' && p.b) registrar(p.b, { avisaNovo: false });  // sinal do Pix caiu
-      else if (p.t === 's' && p.s && Number(p.s.ts || 0) > Number(statusLoja.ts || 0)) {
-        // outro aparelho com o PAINEL mudou o status — reflete aqui também
-        statusLoja = p.s;
-        try { localStorage.setItem(LS_ST, JSON.stringify(statusLoja)); } catch { /* ignora */ }
-        pintarStatus();
-      }
-    };
-  } catch { /* sem internet — tenta de novo na proxima volta */ }
+  try { sseLista.forEach((es) => es.close()); } catch { /* nada */ }
+  sseLista = [];
+  for (const base of canaisNtfy()) {
+    try {
+      const sse = new EventSource(`${base}/${CONFIG.NTFY_TOPIC}/sse`);
+      sse.onopen = () => {
+        canalOk = true;
+        const aviso = $('stAviso');
+        // ao abrir o canal, avisa os clientes "sou eu, o status atual e este"
+        if (!anunciouStatus && statusLoja.ts) {
+          anunciouStatus = true;
+          setTimeout(() => {
+            ultimoStatusEnviado = Date.now();
+            publicarCanal({ t: 's', s: statusLoja });
+          }, 900);
+        }
+        // manda a ocupacao para quem ja esta com o app aberto
+        setTimeout(talvezPublicarOcupados, 1300);
+        if (aviso && !aviso.textContent) pintarStatus();
+      };
+      sse.onerror = () => {
+        // um canal pode cair sem o outro cair
+        canalOk = sseLista.some((es) => es.readyState === 1);
+      };
+      sse.onmessage = (ev) => {
+        let m = null, p = null;
+        try { m = JSON.parse(ev.data); if (m.event !== 'message' || !m.message) return; } catch { return; }
+        try { p = JSON.parse(m.message); } catch { return; }
+        if (p.t === 'b' && p.b) registrar(p.b, { avisaNovo: true });        // agendamento novo do app do cliente
+        else if (p.t === 'p' && p.b) registrar(p.b, { avisaNovo: false });  // sinal do Pix caiu
+        else if (p.t === 's' && p.s && Number(p.s.ts || 0) > Number(statusLoja.ts || 0)) {
+          // outro aparelho com o PAINEL mudou o status — reflete aqui também
+          statusLoja = p.s;
+          try { localStorage.setItem(LS_ST, JSON.stringify(statusLoja)); } catch { /* ignora */ }
+          pintarStatus();
+        }
+      };
+      sseLista.push(sse);
+    } catch { /* sem internet — tenta de novo na proxima volta */ }
+  }
 }
 
 // ---------- confirmar o que o Pix caiu (o barbeiro ve na conta dele) ----------
@@ -761,9 +825,16 @@ $('btnVerificarUpdate').onclick = async () => {
 //  Se o Painel estava fechado quando o cliente agendou, pega aqui.
 // ============================================================
 async function pegarAtrasados() {
+  let txt = '';
+  let algumOk = false;
+  for (const base of canaisNtfy()) {
+    try {
+      const resp = await fetch(`${base}/${CONFIG.NTFY_TOPIC}/json?poll=1&since=12h`);
+      if (resp.ok) { txt += await resp.text() + '\n'; algumOk = true; }
+    } catch { /* esse canal falhou; tenta o outro */ }
+  }
   try {
-    const resp = await fetch(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}/json?poll=1&since=12h`);
-    const txt = await resp.text();
+    if (!algumOk) return;
     for (const linha of String(txt || '').split('\n')) {
       let o = null, p = null;
       try { o = JSON.parse(linha); } catch { continue; }
@@ -784,7 +855,7 @@ async function pegarAtrasados() {
     }
     // terminou de recuperar: agora sim a lista de ocupados esta completa
     backlogOk = true;
-    talvezPublicarOcupados();
+    await talvezPublicarOcupados();
   } catch { /* sem internet — tenta de novo no proximo ciclo */ }
 }
 
@@ -803,6 +874,7 @@ async function ligarNatal(campo, valor) {
   pintarNatal();
   // o app do cliente liga/desliga NA HORA pela internet
   publicarCanal({ t: 's', s: statusLoja });
+  ultimoStatusEnviado = Date.now();
   try {
     await chamarApi('/api/painel/status', {
       method: 'POST',
@@ -814,6 +886,7 @@ async function ligarNatal(campo, valor) {
         abreAs: statusLoja.abreAs,
         fechaAs: statusLoja.fechaAs,
         [campo]: valor,
+        ts: statusLoja.ts,
       }),
     });
   } catch { /* PC desligado — o aviso pela internet ja saiu */ }
@@ -837,8 +910,12 @@ window.addEventListener('load', () => {
     if (document.visibilityState === 'visible') {
       pintarLista();
       atualizarPainel();
-      // reavisa os clientes do status atual (cobre desconexoes longas)
-      if (statusLoja.ts) publicarCanal({ t: 's', s: statusLoja });
+      // reavisa os clientes do status atual (cobre desconexoes longas),
+      // mas sem repetir a cada vez que abre o app (economiza o limite do ntfy)
+      if (statusLoja.ts && Date.now() - ultimoStatusEnviado > 2 * 60 * 1000) {
+        ultimoStatusEnviado = Date.now();
+        publicarCanal({ t: 's', s: statusLoja });
+      }
       talvezPublicarOcupados();
     }
   });

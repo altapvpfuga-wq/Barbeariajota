@@ -203,6 +203,7 @@ app.get('/api/status', (req, res) => {
     fechaAs: st.fechaAs,
     neve: !!st.neve,
     presente: !!st.presente,
+    ts: Number(st.ts) || Date.parse(st.atualizadoEm) || 0,
     weekday: now.getDay(),
     atualizadoEm: st.atualizadoEm,
   });
@@ -262,7 +263,7 @@ app.post('/api/painel/pago', (req, res) => {
 // Painel: o barbeiro marca aberto/fechado e os horarios
 app.post('/api/painel/status', (req, res) => {
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
-  const { modo, aberto, abreAs, fechaAs, neve, presente } = req.body || {};
+  const { modo, aberto, abreAs, fechaAs, neve, presente, ts } = req.body || {};
   const p = loadPainel();
   if (modo === 'auto' || modo === 'manual') p.status.modo = modo;
   if (modo === 'manual' && aberto != null) p.status.aberto = !!aberto;
@@ -270,6 +271,9 @@ app.post('/api/painel/status', (req, res) => {
   if (fechaAs && /^\d{1,2}:\d{2}$/.test(String(fechaAs))) p.status.fechaAs = String(fechaAs).padStart(5, '0');
   if (typeof neve === 'boolean') p.status.neve = neve;
   if (typeof presente === 'boolean') p.status.presente = presente;
+  // guarda o horario do CELULAR do barbeiro (mesmo relogio do app do cliente),
+  // para o site saber qual status e o mais novo sem depender do relogio do PC
+  p.status.ts = Number(ts) || Date.now();
   p.status.atualizadoEm = new Date().toISOString();
   savePainel(p);
   // avisa TODOS os clientes pela internet: horarios e natal mudam na hora
@@ -282,7 +286,7 @@ app.post('/api/painel/status', (req, res) => {
       fechaAs: p.status.fechaAs,
       neve: !!p.status.neve,
       presente: !!p.status.presente,
-      ts: Date.now(),
+      ts: p.status.ts,
     },
   });
   console.log(`[painel] status: modo=${p.status.modo} aberto=${calcularAberto(p.status)} janela ${p.status.abreAs}-${p.status.fechaAs}`);

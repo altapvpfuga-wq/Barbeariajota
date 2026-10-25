@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.38',
+  APP_VERSION: '1.0.39',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -32,9 +32,21 @@ const CONFIG = {
   // canal DIRETO para chegar o agendamento no Painel do barbeiro
   // (ntfy, gratis). TEM que ser o MESMO nome no apk-painel/painel.js.
   NTFY_URL: 'https://ntfy.sh',
+  // canal RESERVA: se o principal ficar fora do ar ou estourar o limite
+  // diario de mensagens, tudo continua funcionando por aqui.
+  NTFY_URL_RESERVA: 'https://ntfy.envs.net',
   NTFY_TOPIC: 'bjota-ag-7k2m9xI',
   ABOUT: 'Na Barbearia do Jota, cuidar do visual é mais do que fazer um corte — é oferecer uma experiência de qualidade, com atendimento de respeito, praticidade e aquele cuidado que você merece.\n\nTrabalhamos com cortes modernos, barba na navalha e serviços pensados para deixar você sempre no estilo. Nosso objetivo é proporcionar um atendimento rápido, profissional e sem complicação.\n\nAqui você escolhe o serviço, o dia e o horário que deseja. Em poucos minutos, seu atendimento já fica agendado e você pode chegar à barbearia sabendo que sua vaga está garantida.\n\nSeu horário, do seu jeito\nChega de perder tempo esperando. Com nosso sistema de agendamento, você escolhe o melhor horário e já deixa tudo organizado antes de sair de casa.\n\nPagamento em dinheiro: a confirmação é feita diretamente pelo WhatsApp.\nPagamento via Pix: você paga um sinal de R$ 10,00 para garantir sua vaga. O valor do sinal é descontado do preço total do serviço.\n\nVaga garantida: após a confirmação do pagamento, seu horário fica reservado para você.\n\nOnde estamos\nBarbearia do Jota\nRua Javata, 1506 - Anchieta\n\nAtendimento: Terça a domingo, das 09h às 21h\nSegunda-feira: fechado\n\nVenha conhecer a Barbearia do Jota e tenha um atendimento de qualidade, com horário marcado e sem complicação.\n\nCorte certo, na hora certa.',
 };
+
+// Enderecos do canal (principal + reserva), sem repetir.
+function canaisNtfy() {
+  const lista = [CONFIG.NTFY_URL];
+  if (CONFIG.NTFY_URL_RESERVA && !lista.includes(CONFIG.NTFY_URL_RESERVA)) {
+    lista.push(CONFIG.NTFY_URL_RESERVA);
+  }
+  return lista.filter(Boolean);
+}
 
 // ===== serviços =====
 const SERVICES = [
@@ -109,6 +121,7 @@ function newId() { return 'BK' + Date.now().toString(36).toUpperCase() + Math.fl
 // Guarda SO o dia e a hora (nunca nome/telefone) para a grade mostrar
 // "ocupado" quando outra pessoa ja reservou aquele horario.
 const LS_OCUPADOS = 'barbearia_ocupados_v1';
+const LS_OCUPADOS_TS = 'barbearia_ocupados_ts_v1'; // qual lista completa e a mais nova
 
 function loadOcupados() {
   let obj = {};
@@ -144,8 +157,12 @@ function desmarcarOcupado(id) {
 // recebe uma lista de ocupacao (do Painel ou do PC).
 // remover=true so quando a lista é a COMPLETA do Painel; a do PC pode estar
 // incompleta (PC desligado), entao nesse caso so acrescenta, nunca libera.
-function receberOcupados(lista, { remover = true } = {}) {
+function receberOcupados(lista, { remover = true, ts = 0 } = {}) {
   if (!Array.isArray(lista)) return false;
+  const ultimoTs = Number(localStorage.getItem(LS_OCUPADOS_TS)) || 0;
+  // lista atrasada (ex.: veio do canal reserva depois da lista nova):
+  // nao pode "liberar" um horario que ja foi reservado
+  if (remover && ts && ultimoTs && ts < ultimoTs) return false;
   const meus = new Set(loadBookings().map((b) => b.id));
   const agora = Date.now();
   const antigos = loadOcupados();
@@ -172,6 +189,9 @@ function receberOcupados(lista, { remover = true } = {}) {
     }
   }
   if (mudou) saveOcupados(novo);
+  if (remover && ts && ts > ultimoTs) {
+    try { localStorage.setItem(LS_OCUPADOS_TS, String(ts)); } catch { /* ignora */ }
+  }
   return mudou;
 }
 function ocupadoNaGrade(list, ocupados, dia, hora) {
@@ -842,18 +862,21 @@ function filaSync(b) {
 // (com limite de tempo para nao travar a tela esperando)
 async function mandarAgendamento(b) {
   let entregue = false;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 12000);
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 10000);
-    const r = await fetch(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ t: 'b', b }),
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    entregue = r.ok;
+    // manda para os DOIS canais (principal + reserva); basta um funcionar
+    const resultados = await Promise.allSettled(canaisNtfy().map((base) =>
+      fetch(`${base}/${CONFIG.NTFY_TOPIC}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ t: 'b', b }),
+        signal: ctrl.signal,
+      })
+    ));
+    entregue = resultados.some((r) => r.status === 'fulfilled' && r.value && r.value.ok);
   } catch { /* sem internet */ }
+  clearTimeout(t);
   try { await chamarApi('/api/agendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); } catch { /* PC desligado, tudo bem */ }
   return entregue;
 }
@@ -893,14 +916,31 @@ let statusLoja = ((tem) => {
 
 // aplica o status novo e redesenha a loja na hora
 function aplicarStatusLoja(s) {
-  // aplica se QUALQUER campo mudou (modo, aberto, abreAs, fechaAs) —
+  // mensagem atrasada (chegou depois de uma mais nova, ex.: canal reserva):
+  // nao pode desfazer o que ja foi aplicado
+  const tsNovo = Number(s && s.ts) || 0;
+  const tsAtual = Number(statusLoja.ts) || 0;
+  if (tsNovo && tsAtual && tsNovo < tsAtual) return;
+  // aplica se QUALQUER campo mudou (modo, aberto, abreAs, fechaAs, neve, presente) —
   // sem depender de timestamp (que falha com relógio desregulado)
   const mudou = (s.modo && s.modo !== statusLoja.modo)
     || (s.aberto !== undefined && s.aberto !== statusLoja.aberto)
     || (s.abreAs && s.abreAs !== statusLoja.abreAs)
-    || (s.fechaAs && s.fechaAs !== statusLoja.fechaAs);
-  if (!mudou && statusLoja.ok) return;   // nada novo — nao re-renderiza
-  statusLoja = { ...s, ok: true };
+    || (s.fechaAs && s.fechaAs !== statusLoja.fechaAs)
+    || (s.neve !== undefined && !!s.neve !== !!statusLoja.neve)
+    || (s.presente !== undefined && !!s.presente !== !!statusLoja.presente);
+  if (!mudou && statusLoja.ok) {
+    // mesmo conteudo, mas mensagem mais nova: guarda o ts para uma
+    // mensagem atrasada (canal reserva) nao desfazer o que ja esta valendo
+    if (tsNovo && tsNovo > tsAtual) {
+      statusLoja = { ...statusLoja, ts: tsNovo };
+      try { localStorage.setItem('barbearia_status_loja_v1', JSON.stringify(statusLoja)); } catch { /* ignora */ }
+    }
+    return;   // nada novo — nao re-renderiza
+  }
+  // junta com o que ja sabemos: uma mensagem antiga (sem neve/presente)
+  // nao pode apagar os efeitos que ja estavam ligados
+  statusLoja = { ...statusLoja, ...s, ok: true };
   try { localStorage.setItem('barbearia_status_loja_v1', JSON.stringify(statusLoja)); } catch { /* ignora */ }
   renderToday();
   renderTimes();
@@ -927,7 +967,7 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
       if (!meusIds.has(p.b.id) && marcarOcupado(p.b.id, p.b.dateKey, p.b.time)) ocupacaoMudou = true;
     } else if (p && p.t === 'o' && Array.isArray(p.o)) {
       // lista de ocupacao vinda do Painel (cobre quem abriu depois)
-      if (receberOcupados(p.o, { remover: p.completo !== false })) ocupacaoMudou = true;
+      if (receberOcupados(p.o, { remover: p.completo !== false, ts: Number(p.ts) || 0 })) ocupacaoMudou = true;
     } else if (p && p.t === 'e' && p.b && p.b.id) {
       // a barbearia EDITOU o agendamento (dia/hora/etc): atualiza aqui na hora
       if (!meusIds.has(p.b.id) && p.b.dateKey && p.b.time && p.b.status !== 'cancelado' && p.b.status !== 'expirado') {
@@ -1010,34 +1050,41 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
   }
 }
 
-// canal AO VIVO: o aberto/fechado muda no site NA HORA (nao depende do PC)
-let sseLoja = null;
+// canal AO VIVO: o aberto/fechado muda no site NA HORA (nao depende do PC).
+// Escuta o principal e o reserva; mensagem repetida nao atrapalha.
+let sseLoja = [];
 function ligarCanalCliente() {
-  try { if (sseLoja) sseLoja.close(); } catch { /* nada */ }
-  try {
-    sseLoja = new EventSource(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}/sse`);
-    sseLoja.onmessage = (ev) => { processarCanal(ev.data, { aoVivo: true }); };
-    // se cair, o navegador reconecta sozinho
-  } catch { /* sem internet — a consulta de seguranca cobre */ }
+  try { sseLoja.forEach((es) => es.close()); } catch { /* nada */ }
+  sseLoja = [];
+  for (const base of canaisNtfy()) {
+    try {
+      const es = new EventSource(`${base}/${CONFIG.NTFY_TOPIC}/sse`);
+      es.onmessage = (ev) => { processarCanal(ev.data, { aoVivo: true }); };
+      // se cair, o navegador reconecta sozinho
+      sseLoja.push(es);
+    } catch { /* sem internet — a consulta de seguranca cobre */ }
+  }
 }
 
 // consulta de seguranca (caso o canal ao vivo nao esteja aberto)
 async function carregarStatusLoja() {
-  try {
-    const resp = await fetch(`${CONFIG.NTFY_URL}/${CONFIG.NTFY_TOPIC}/json?poll=1&since=12h`);
-    await processarCanal(await resp.text());
-  } catch { /* sem internet — usa o que ja tenho em casa */ }
-  // reforco: se o PC estiver ligado, confere o status central — mas SO se o
-  // cliente nao tiver um status recente (evita sobrescrever "fechado" manual
-  // com uma copia velha do servidor — esse era o bug de "abre sozinho")
+  let texto = '';
+  for (const base of canaisNtfy()) {
+    try {
+      const resp = await fetch(`${base}/${CONFIG.NTFY_TOPIC}/json?poll=1&since=12h`);
+      if (resp.ok) texto += await resp.text() + '\n';
+    } catch { /* esse canal falhou; tenta o outro */ }
+  }
+  if (texto) await processarCanal(texto);
+  // reforco: se o PC estiver ligado, confere o status central. So aplica se
+  // for MAIS NOVO que o que ja temos (uma copia velha do PC nao pode
+  // sobrescrever um "fechado" manual recem-enviado pelo canal).
   try {
     const r2 = await chamarApi('/api/status');
     if (r2 && (r2.modo === 'auto' || r2.modo === 'manual')) {
-      const ts2 = Date.parse(r2.atualizadoEm) || 0;
+      const ts2 = Number(r2.ts) || Date.parse(r2.atualizadoEm) || 0;
       const tsAtual = Number(statusLoja.ts) || 0;
-      const clientRecente = statusLoja.ok && (Date.now() - tsAtual < 5 * 60 * 1000);
-      // so aplica se: cliente sem status, OU servidor genuinamente mais recente (>5 min)
-      if (!clientRecente || ts2 > tsAtual + 5 * 60 * 1000) {
+      if (!statusLoja.ok || ts2 > tsAtual) {
         aplicarStatusLoja({
           modo: r2.modo,
           aberto: r2.modo === 'manual' ? !!r2.aberto : null,
