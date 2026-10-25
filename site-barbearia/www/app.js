@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.31',
+  APP_VERSION: '1.0.32',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -1436,11 +1436,6 @@ async function renderToday() {
   label.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
     + ' · Aberto ' + abreHoje + '–' + fechaTxt;
 
-  // o barbeiro forcou o fechamento pelo painel
-  if (statusLoja.modo === 'manual' && statusLoja.aberto === false) {
-    box.innerHTML = '<span class="closed-big">🔴 Fechado agora</span><p class="tiny">Fale com a barbearia pelo WhatsApp para confirmar a vaga.</p>';
-    return;
-  }
   // o barbeiro forcou ABERTO: a loja esta aberta agora, mesmo fora do horario de sempre
   if (statusLoja.modo === 'manual' && statusLoja.aberto === true) {
     const abreHoje = abreAsLoja();
