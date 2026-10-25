@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.37',
+  APP_VERSION: '1.0.38',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -41,6 +41,7 @@ const LS_SRV = 'painel_servidor_v1';
 const LS_PIN = 'painel_pin_v1';
 const LS_ADIA = 'painel_update_adiado';
 const LS_VISTO = 'painel_update_visto_v1'; // popup forcado aparece SO UMA VEZ por versao
+const LS_NOTIF_UPDATE = 'painel_update_notificado_v1'; // aviso na barra: 1 vez por versao
 const LS_AG = 'painel_agendamentos_v1';   // agendamentos salvos no aparelho
 const LS_ST = 'painel_status_v1';          // ultimo status aberto/fechado
 
@@ -327,6 +328,11 @@ function pintarLista() {
 let sse = null;
 let canalOk = false;
 let anunciouStatus = false;
+// so publica a lista de ocupados depois de recuperar o que chegou com o app fechado
+// (senao uma lista vazia/parcial poderia "liberar" horarios que ja estao reservados)
+let backlogOk = false;
+// e so depois de tentar juntar os agendamentos que estao no PC
+let servidorTentou = false;
 
 function publicarCanal(corpo) {
   try {
@@ -336,6 +342,26 @@ function publicarCanal(corpo) {
       body: JSON.stringify(corpo),
     }).catch(() => {});
   } catch { /* ignora */ }
+}
+
+// avisa os apps dos clientes QUAIS horarios ja estao reservados.
+// Sai daqui SO id + dia + hora (nenhum nome ou telefone).
+function publicarOcupados() {
+  try {
+    const hoje = new Date();
+    const chaveHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+    const lista = Object.values(lerLocais())
+      .filter((b) => b && b.id && b.dateKey && b.time
+        && b.dateKey >= chaveHoje
+        && b.status !== 'cancelado' && b.status !== 'expirado')
+      .map((b) => ({ id: b.id, dateKey: b.dateKey, time: b.time }));
+    publicarCanal({ t: 'o', o: lista, completo: true });
+  } catch { /* ignora */ }
+}
+// a lista so sai quando o Painel ja recuperou tudo (canal + PC)
+function talvezPublicarOcupados() {
+  if (!backlogOk || !servidorTentou) return;
+  publicarOcupados();
 }
 
 function ligarCanal() {
@@ -350,6 +376,8 @@ function ligarCanal() {
         anunciouStatus = true;
         setTimeout(() => publicarCanal({ t: 's', s: statusLoja }), 900);
       }
+      // manda a ocupacao para quem ja esta com o app aberto
+      setTimeout(talvezPublicarOcupados, 1300);
       if (aviso && !aviso.textContent) pintarStatus();
     };
     sse.onerror = () => { canalOk = false; };
@@ -550,6 +578,10 @@ async function atualizarPainel() {
     for (const b of (d.agendamentos || [])) registrar(b, { avisaNovo: false });
   } catch {
     // sem PC: sem problema, o canal da internet cobre a lista
+  } finally {
+    // ja tentou o PC: agora pode publicar a lista completa (com o que veio do canal)
+    servidorTentou = true;
+    talvezPublicarOcupados();
   }
   pintarLista();
 }
@@ -636,12 +668,28 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     if (!forcar && silencioso && adiado > Date.now() - 5 * 60 * 1000) return null;
     const asset = (rel.assets || []).find((a) => new RegExp('^' + CONFIG.ASSET_PREFIX + '.*\\.apk$', 'i').test(a.name));
     mostrarAtualizacao(nova, notas, asset, forcar);
+    // avisa tambem na barra do Android (uma vez por versao, e so na checagem automatica)
+    if (silencioso) avisarAtualizacao(nova);
     return nova;
   } catch (e) {
     console.warn('[painel-update] ', e.message);
     if (!silencioso) $('updStatus').textContent = 'Não consegui checar: ' + e.message;
     return null;
   }
+}
+// notificacao do Android quando aparece uma versao nova do Painel
+function avisarAtualizacao(versao) {
+  try {
+    if (!versao) return;
+    if (localStorage.getItem(LS_NOTIF_UPDATE) === String(versao)) return;
+    const aviso = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Aviso;
+    if (!aviso) return;
+    aviso.notificar({
+      titulo: '💈 Atualização do Painel',
+      texto: `Versão ${versao} disponível. Toque para abrir e atualizar.`,
+    }).catch(() => {});
+    localStorage.setItem(LS_NOTIF_UPDATE, String(versao));
+  } catch { /* sem o plugin, o popup do app continua aparecendo */ }
 }
 function mostrarAtualizacao(versao, notasBrutas, asset, forcar) {
   // tira a tag [FORCAR] do texto que aparece para voce
@@ -734,6 +782,9 @@ async function pegarAtrasados() {
         pintarStatus();
       }
     }
+    // terminou de recuperar: agora sim a lista de ocupados esta completa
+    backlogOk = true;
+    talvezPublicarOcupados();
   } catch { /* sem internet — tenta de novo no proximo ciclo */ }
 }
 
@@ -788,6 +839,7 @@ window.addEventListener('load', () => {
       atualizarPainel();
       // reavisa os clientes do status atual (cobre desconexoes longas)
       if (statusLoja.ts) publicarCanal({ t: 's', s: statusLoja });
+      talvezPublicarOcupados();
     }
   });
   document.title = 'Painel — ' + CONFIG.BARBER_NAME;

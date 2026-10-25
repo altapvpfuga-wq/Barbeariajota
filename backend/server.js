@@ -208,6 +208,20 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Ocupacao publica: SO o dia e a hora (nunca nome/telefone).
+// O app do cliente usa isso para marcar os horarios ja reservados.
+app.get('/api/ocupados', (req, res) => {
+  const p = loadPainel();
+  const now = new Date();
+  const hoje = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const ocupados = Object.values(p.agendamentos || {})
+    .filter((b) => b && b.id && b.dateKey && b.time
+      && b.dateKey >= hoje
+      && b.status !== 'cancelado' && b.status !== 'expirado')
+    .map((b) => ({ id: b.id, dateKey: b.dateKey, time: b.time }));
+  res.json({ ocupados });
+});
+
 // Painel (APK do barbeiro, com PIN): tudo — status + agendamentos
 app.get('/api/painel', (req, res) => {
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });

@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.BitmapFactory;
 import android.os.Build;
 
 import androidx.core.app.ActivityCompat;
@@ -55,6 +56,7 @@ public class AvisoPlugin extends Plugin {
                 CANAL, "Agendamentos", NotificationManager.IMPORTANCE_HIGH);
         canal.setDescription("Aviso quando um cliente agenda na barbearia");
         canal.enableVibration(true);
+        canal.setShowBadge(true);
         nm.createNotificationChannel(canal);
     }
 
@@ -87,7 +89,11 @@ public class AvisoPlugin extends Plugin {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
             NotificationCompat.Builder n = new NotificationCompat.Builder(ctx, CANAL)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    // icone pequeno: silhueta branca (exigencia do Android na barra)
+                    .setSmallIcon(R.drawable.ic_stat_barbeiro)
+                    // icone grande: a arte do barbeiro, colorida, no corpo da notificacao
+                    .setLargeIcon(BitmapFactory.decodeResource(ctx.getResources(), R.drawable.ic_notif_barbeiro))
+                    .setColor(0xFFC9A227)
                     .setContentTitle(titulo)
                     .setContentText(texto)
                     .setStyle(new NotificationCompat.BigTextStyle().bigText(texto))

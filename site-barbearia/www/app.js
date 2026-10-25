@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.37',
+  APP_VERSION: '1.0.38',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -104,6 +104,80 @@ function bookingHoldsSlot(b) {
   return new Date() < bookingEnd(b);
 }
 function newId() { return 'BK' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 90 + 10); }
+
+// ===== HORARIOS OCUPADOS POR OUTROS CLIENTES =====
+// Guarda SO o dia e a hora (nunca nome/telefone) para a grade mostrar
+// "ocupado" quando outra pessoa ja reservou aquele horario.
+const LS_OCUPADOS = 'barbearia_ocupados_v1';
+
+function loadOcupados() {
+  let obj = {};
+  try { obj = JSON.parse(localStorage.getItem(LS_OCUPADOS) || '{}') || {}; } catch { obj = {}; }
+  const hoje = new Date();
+  const limite = toKey(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
+  for (const id of Object.keys(obj)) {
+    const x = obj[id];
+    if (!x || !x.dateKey || !x.time || x.dateKey < limite) delete obj[id];
+  }
+  return obj;
+}
+function saveOcupados(obj) {
+  try { localStorage.setItem(LS_OCUPADOS, JSON.stringify(obj)); } catch { /* ignora */ }
+}
+function marcarOcupado(id, dateKey, time) {
+  if (!id || !dateKey || !time) return false;
+  const o = loadOcupados();
+  const antes = o[id];
+  if (antes && antes.dateKey === dateKey && antes.time === time) return false;
+  o[id] = { id, dateKey, time, ts: Date.now() };
+  saveOcupados(o);
+  return true;
+}
+function desmarcarOcupado(id) {
+  if (!id) return false;
+  const o = loadOcupados();
+  if (!o[id]) return false;
+  delete o[id];
+  saveOcupados(o);
+  return true;
+}
+// recebe uma lista de ocupacao (do Painel ou do PC).
+// remover=true so quando a lista é a COMPLETA do Painel; a do PC pode estar
+// incompleta (PC desligado), entao nesse caso so acrescenta, nunca libera.
+function receberOcupados(lista, { remover = true } = {}) {
+  if (!Array.isArray(lista)) return false;
+  const meus = new Set(loadBookings().map((b) => b.id));
+  const agora = Date.now();
+  const antigos = loadOcupados();
+  const novo = {};
+  let mudou = false;
+  for (const x of lista) {
+    if (!x || !x.id || !x.dateKey || !x.time) continue;
+    if (meus.has(x.id)) continue;
+    novo[x.id] = { id: x.id, dateKey: x.dateKey, time: x.time, ts: Number(x.ts) || agora };
+    const a = antigos[x.id];
+    if (!a || a.dateKey !== x.dateKey || a.time !== x.time) mudou = true;
+  }
+  if (remover) {
+    for (const id of Object.keys(antigos)) {
+      if (novo[id]) continue;
+      const x = antigos[id];
+      if (agora - (Number(x.ts) || 0) < 2 * 60 * 1000) { novo[id] = x; continue; }
+      mudou = true;
+    }
+    if (Object.keys(antigos).length !== Object.keys(novo).length) mudou = true;
+  } else {
+    for (const id of Object.keys(antigos)) {
+      if (!novo[id]) novo[id] = antigos[id];
+    }
+  }
+  if (mudou) saveOcupados(novo);
+  return mudou;
+}
+function ocupadoNaGrade(list, ocupados, dia, hora) {
+  if (list.some((b) => b.dateKey === dia && b.time === hora && bookingHoldsSlot(b))) return true;
+  return ocupados.some((o) => o.dateKey === dia && o.time === hora);
+}
 
 // ===== whatsapp =====
 function payLabel(b) {
@@ -278,10 +352,11 @@ async function renderTimes() {
   // fecha no dia seguinte (ex.: 09:00 às 03:00 ou 00:00 = até meia-noite)
   if (fechaM <= abreM) fechaM += 24 * 60;
   const list = await loadBookings();
+  const ocupados = Object.values(loadOcupados());
   box.innerHTML = TIME_SLOTS.map((t) => {
     const [h, m] = t.split(':').map(Number);
     const slotMinutes = h * 60 + m;
-    const busy = list.some((b) => b.dateKey === dayKey && b.time === t && bookingHoldsSlot(b));
+    const busy = ocupadoNaGrade(list, ocupados, dayKey, t);
     const expired = isToday && slotMinutes < currentMinutes;
     // fora do horario definido pelo barbeiro no painel
     if (slotMinutes < abreM || slotMinutes > fechaM) return '';
@@ -355,6 +430,11 @@ function collectOrToast() {
   if (!dayKey) { toast('Escolha o dia.'); return null; }
   // trava contra hora errada: so aceita um horario que esta na grade da etapa 3
   if (!time || !TIME_SLOTS.includes(time)) { toast('Escolha a hora de novo.'); time = null; renderTimes(); showStep(3); return null; }
+  // trava final: alguem pode ter reservado esse horario enquanto o cliente preenchia
+  if (dayKey && time && Object.values(loadOcupados()).some((o) => o.dateKey === dayKey && o.time === time)) {
+    toast('⏰ Esse horário acabou de ser reservado. Escolha outro.');
+    time = null; renderTimes(); showStep(3); return null;
+  }
   return { name: name.trim(), phone: phone.trim(), note: note.trim() };
 }
 
@@ -831,6 +911,8 @@ function aplicarStatusLoja(s) {
 // decodifica cada linha do canal (chega por SSE ou pela consulta)
 async function processarCanal(texto, { aoVivo = false } = {}) {
   const msgs = [];
+  const meusIds = new Set(loadBookings().map((b) => b.id));
+  let ocupacaoMudou = false;
   for (const linha of String(texto || '').split('\n')) {
     let o = null, p = null;
     try { o = JSON.parse(linha); } catch { continue; }
@@ -840,8 +922,20 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
     if (p && p.t === 's' && p.s) {
       // status: tratado depois do loop (o poll aplica so o mais recente)
       continue;
+    } else if (p && p.t === 'b' && p.b && p.b.id) {
+      // OUTRO cliente reservou: marca o horario como ocupado aqui
+      if (!meusIds.has(p.b.id) && marcarOcupado(p.b.id, p.b.dateKey, p.b.time)) ocupacaoMudou = true;
+    } else if (p && p.t === 'o' && Array.isArray(p.o)) {
+      // lista de ocupacao vinda do Painel (cobre quem abriu depois)
+      if (receberOcupados(p.o, { remover: p.completo !== false })) ocupacaoMudou = true;
     } else if (p && p.t === 'e' && p.b && p.b.id) {
       // a barbearia EDITOU o agendamento (dia/hora/etc): atualiza aqui na hora
+      if (!meusIds.has(p.b.id) && p.b.dateKey && p.b.time && p.b.status !== 'cancelado' && p.b.status !== 'expirado') {
+        const ocEdit = loadOcupados();
+        ocEdit[p.b.id] = { id: p.b.id, dateKey: p.b.dateKey, time: p.b.time, ts: Date.now() };
+        saveOcupados(ocEdit);
+        ocupacaoMudou = true;
+      }
       const atual = loadBookings().find((b) => b.id === p.b.id);
       if (atual) {
         updateBooking(p.b.id, { ...p.b });
@@ -862,6 +956,7 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
       // para nao voltar sozinho depois)
       const atual = loadBookings().find((b) => b.id === p.b.id);
       saveBookings(loadBookings().filter((b) => b.id !== p.b.id));
+      if (desmarcarOcupado(p.b.id)) ocupacaoMudou = true;
       if (pixBooking && pixBooking.id === p.b.id) pixBooking = null;
       try {
         const fila = JSON.parse(localStorage.getItem(LS_SYNC) || '{}');
@@ -898,6 +993,20 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
         (Number(b.s.ts) || 0) > (Number(a.s.ts) || 0) ? b : a);
       aplicarStatusLoja(maisNovo.s);
     }
+  }
+
+  // a ocupacao mudou (outra pessoa reservou, editou ou cancelou):
+  // atualiza a grade na hora e solta o horario que o cliente tinha escolhido
+  if (ocupacaoMudou) {
+    if (dayKey && time) {
+      const oc = Object.values(loadOcupados());
+      if (oc.some((o) => o.dateKey === dayKey && o.time === time)) {
+        time = null;
+        toast('⏰ Esse horário acabou de ser reservado. Escolha outro.');
+      }
+    }
+    renderTimes();
+    renderToday();
   }
 }
 
@@ -942,6 +1051,17 @@ async function carregarStatusLoja() {
     }
   } catch { /* PC desligado — o canal da internet cobre */ }
 }
+// pega a ocupacao no PC (se estiver ligado) — so dia e hora, sem dados pessoais.
+// A lista do PC pode estar incompleta (ficou desligado), entao so acrescenta.
+async function carregarOcupados() {
+  try {
+    const r = await chamarApi('/api/ocupados');
+    if (r && Array.isArray(r.ocupados) && receberOcupados(r.ocupados, { remover: false })) {
+      renderTimes();
+      renderToday();
+    }
+  } catch { /* PC desligado — o canal da internet cobre */ }
+}
 const minutosDe = (t) => { const s = String(t || '').trim(); if (s === '00:00') return 24 * 60; const [h, m] = s.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
 const abreAsLoja = () => statusLoja.ok ? (statusLoja.abreAs || '09:00') : '09:00';
 const fechaAsLoja = () => statusLoja.ok ? (statusLoja.fechaAs || '21:00') : '21:00';
@@ -954,18 +1074,24 @@ const fechaAsLoja = () => statusLoja.ok ? (statusLoja.fechaAs || '21:00') : '21:
 // ============================================================
 let neveTimer = null;
 let faiscaTimer = null;
+let presenteTimer = null;
+let natalTrocaTimer = null;
+let presenteJaAbriu = false;
 
 const NATAL_EMOJIS = ['🎁', '🎄', '✂️', '🎅', '⭐', '🤶', '🔔', '❄️', '🦌', '🍬', '🕯️', '🌟'];
+// o que cai quando o PRESENTE esta ligado (sem neve)
+const PRESENTE_EMOJIS = ['🎁', '🎄', '🎅', '🤶', '⭐', '🔔', '🦌', '🍬', '✨', '🎉'];
+const CONFETE_CORES = ['#EF4444', '#22C55E', '#C9A227', '#3B82F6', '#A855F7', '#F97316', '#F5F5F5'];
 
 function renderNatal() {
-  // ---------- NEVE + LUZES (a neve cai na tela toda) ----------
+  // ---------- NEVE: so flocos + cabecas de Halloween ----------
   let layer = document.getElementById('neveLayer');
   if (statusLoja.neve) {
     if (!layer) {
       layer = document.createElement('div');
       layer.id = 'neveLayer';
       document.body.appendChild(layer);
-      // chuva inicial para a tela já nascer natalina
+      // chuva inicial para a tela já nascer com o efeito
       for (let i = 0; i < 14; i++) setTimeout(nevar, i * 90);
       neveTimer = setInterval(nevar, 240);
     }
@@ -973,9 +1099,18 @@ function renderNatal() {
     if (neveTimer) { clearInterval(neveTimer); neveTimer = null; }
     layer.remove();
   }
-  // ---------- PRESENTE flutuante (brilha e solta faiscas) ----------
-  let gift = document.getElementById('btnPresente');
+
+  // ---------- PRESENTE: caixa + chuva de Natal (sem neve) ----------
+  let chuva = document.getElementById('presenteLayer');
   if (statusLoja.presente) {
+    if (!chuva) {
+      chuva = document.createElement('div');
+      chuva.id = 'presenteLayer';
+      document.body.appendChild(chuva);
+      for (let i = 0; i < 10; i++) setTimeout(cairPresente, i * 110);
+      presenteTimer = setInterval(cairPresente, 280);
+    }
+    let gift = document.getElementById('btnPresente');
     if (!gift) {
       gift = document.createElement('button');
       gift.id = 'btnPresente';
@@ -986,9 +1121,22 @@ function renderNatal() {
       document.body.appendChild(gift);
       faiscaTimer = setInterval(faiscar, 750);
     }
+    // abre a caixa com "Feliz Natal" uma vez (quando o barbeiro liga o presente)
+    if (!presenteJaAbriu) {
+      presenteJaAbriu = true;
+      setTimeout(() => { if (statusLoja.presente) abrirPresente(); }, 1400);
+    }
   } else {
+    if (chuva) chuva.remove();
+    if (presenteTimer) { clearInterval(presenteTimer); presenteTimer = null; }
+    const gift = document.getElementById('btnPresente');
     if (gift) gift.remove();
     if (faiscaTimer) { clearInterval(faiscaTimer); faiscaTimer = null; }
+    // se o barbeiro desligou o presente, fecha a caixinha que estava aberta
+    const modalNatal = document.getElementById('modalNatal');
+    if (modalNatal) modalNatal.remove();
+    if (natalTrocaTimer) { clearInterval(natalTrocaTimer); natalTrocaTimer = null; }
+    presenteJaAbriu = false;
   }
 }
 
@@ -1000,13 +1148,9 @@ function nevar() {
   const depth = Math.random();
   const sorte = Math.random();
   let ch, base;
-  if (sorte < 0.58) { ch = '❄'; base = 9; }
-  else if (sorte < 0.70) { ch = '❅'; base = 9; }
-  else if (sorte < 0.78) { ch = '🎄'; base = 15; }
-  else if (sorte < 0.85) { ch = '⭐'; base = 12; }
-  else if (sorte < 0.91) { ch = '🔔'; base = 12; }
-  else if (sorte < 0.96) { ch = '🎅'; base = 14; }
-  else { ch = '✨'; base = 12; }
+  if (sorte < 0.70) { ch = '❄'; base = 9; }
+  else if (sorte < 0.85) { ch = '❅'; base = 10; }
+  else { ch = '🎃'; base = 18; }   // cabeca de Halloween
   const f = document.createElement('span');
   f.className = 'floco';
   f.textContent = ch;
@@ -1017,6 +1161,44 @@ function nevar() {
   const dur = 6 + (1 - depth) * 8;   // longe = mais lento
   f.style.animationDuration = dur.toFixed(2) + 's';
   if (depth < 0.28) f.style.filter = 'blur(1.5px)';
+  onde.appendChild(f);
+  setTimeout(() => f.remove(), (dur + 1) * 1000);
+}
+
+// chuva do PRESENTE: confete, arvores, papai noel, presentes... (sem neve)
+function cairPresente() {
+  const onde = document.getElementById('presenteLayer');
+  if (!onde) return;
+  if (onde.childElementCount > 70) return;
+  const depth = Math.random();
+  // 42% de chance de ser confete colorido
+  if (Math.random() < 0.42) {
+    const c = document.createElement('span');
+    c.className = 'confeteCaindo';
+    c.style.left = (Math.random() * 100) + 'vw';
+    c.style.background = CONFETE_CORES[Math.floor(Math.random() * CONFETE_CORES.length)];
+    c.style.width = (5 + Math.round(Math.random() * 7)) + 'px';
+    c.style.height = (8 + Math.round(Math.random() * 10)) + 'px';
+    if (Math.random() < 0.4) c.style.borderRadius = '50%';
+    c.style.setProperty('--dx', Math.round((Math.random() - 0.5) * 160) + 'px');
+    const durC = 4 + (1 - depth) * 5;
+    c.style.animationDuration = durC.toFixed(2) + 's';
+    c.style.opacity = (0.55 + Math.random() * 0.45).toFixed(2);
+    onde.appendChild(c);
+    setTimeout(() => c.remove(), (durC + 0.8) * 1000);
+    return;
+  }
+  const ch = PRESENTE_EMOJIS[Math.floor(Math.random() * PRESENTE_EMOJIS.length)];
+  const f = document.createElement('span');
+  f.className = 'presenteCaindo';
+  f.textContent = ch;
+  f.style.left = (Math.random() * 100) + 'vw';
+  f.style.fontSize = Math.round(15 + depth * 20) + 'px';
+  f.style.opacity = (0.5 + Math.random() * 0.5).toFixed(2);
+  f.style.setProperty('--dx', Math.round((Math.random() - 0.5) * 150) + 'px');
+  const dur = 5 + (1 - depth) * 6;
+  f.style.animationDuration = dur.toFixed(2) + 's';
+  if (depth < 0.3) f.style.filter = 'blur(1px)';
   onde.appendChild(f);
   setTimeout(() => f.remove(), (dur + 1) * 1000);
 }
@@ -1077,8 +1259,12 @@ function abrirPresente() {
   }, 120);
   const emoji = fundo.querySelector('#presenteEmoji');
   let i = 0;
-  const troca = setInterval(() => { emoji.textContent = NATAL_EMOJIS[i = (i + 1) % NATAL_EMOJIS.length]; }, 550);
-  fundo.querySelector('#btnFecharNatal').onclick = () => { clearInterval(troca); fundo.remove(); };
+  if (natalTrocaTimer) clearInterval(natalTrocaTimer);
+  natalTrocaTimer = setInterval(() => { emoji.textContent = NATAL_EMOJIS[i = (i + 1) % NATAL_EMOJIS.length]; }, 550);
+  fundo.querySelector('#btnFecharNatal').onclick = () => {
+    if (natalTrocaTimer) { clearInterval(natalTrocaTimer); natalTrocaTimer = null; }
+    fundo.remove();
+  };
 }
 
 // ---------- abre a espera do pagamento no link fixo ----------
@@ -1469,8 +1655,9 @@ async function renderToday() {
       return;
     }
     const listA = await loadBookings();
+    const ocupadosA = Object.values(loadOcupados());
     box.innerHTML = futurasAberto.map((t) => {
-      const busy = listA.some((b) => b.dateKey === hojeKey && b.time === t && bookingHoldsSlot(b));
+      const busy = ocupadoNaGrade(listA, ocupadosA, hojeKey, t);
       return `<button class="slot ${busy ? 'busy' : ''}" data-t="${t}" ${busy ? 'disabled' : ''}>${t}</button>`;
     }).join('');
     box.querySelectorAll('.slot:not(.busy)').forEach((el) => (el.onclick = () => {
@@ -1516,8 +1703,9 @@ async function renderToday() {
     return;
   }
   const list = await loadBookings();
+  const ocupadosHoje = Object.values(loadOcupados());
   box.innerHTML = futuras.map((t) => {
-    const busy = list.some((b) => b.dateKey === hojeKey && b.time === t && bookingHoldsSlot(b));
+    const busy = ocupadoNaGrade(list, ocupadosHoje, hojeKey, t);
     return `<button class="slot ${busy ? 'busy' : ''}" data-t="${t}" ${busy ? 'disabled' : ''}>${t}</button>`;
   }).join('');
   box.querySelectorAll('.slot:not(.busy)').forEach((el) => (el.onclick = () => {
@@ -1694,13 +1882,14 @@ window.addEventListener('load', () => {
   // envia os agendamentos que ficaram na fila (sem internet na hora)
   descarregarSync();
   carregarStatusLoja();
+  carregarOcupados();
   // natal: neve/presente salvos no cache aparecem enquanto o canal abre
   renderNatal();
   // canal AO VIVO: aberto/fechado do Painel aparece na hora no site
   ligarCanalCliente();
-  setInterval(() => { descarregarSync(); carregarStatusLoja(); }, 30 * 1000);
+  setInterval(() => { descarregarSync(); carregarStatusLoja(); carregarOcupados(); }, 30 * 1000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { descarregarSync(); carregarStatusLoja(); }
+    if (document.visibilityState === 'visible') { descarregarSync(); carregarStatusLoja(); carregarOcupados(); }
   });
   // garante scroll no topo depois de tudo renderizar
   window.scrollTo(0, 0);
