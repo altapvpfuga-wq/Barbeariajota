@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.36',
+  APP_VERSION: '1.0.37',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -269,27 +269,8 @@ async function renderTimes() {
   const tkey = toKey(now.getFullYear(), now.getMonth(), now.getDate());
   const isToday = dayKey === tkey;
   const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 99999;
-  // o barbeiro forcou o fechamento pelo painel
-  const fechadoAgora = statusLoja.modo === 'manual' && statusLoja.aberto !== true;
-  if (fechadoAgora && isToday) {
-    const abreTxt = abreAsLoja();
-    const fechaTxt = fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja();
-    box.innerHTML = '<span class="closed-big">🔴 Fechado agora</span>'
-      + '<p class="tiny">Acabaram as vagas de hoje</p>'
-      + '<p class="tiny">marque uma vaga pra manhã — a barbearia abre de ' + abreTxt + ' às ' + fechaTxt + ' 🎉✂️ As vagas de hoje já se esgotaram!</p>'
-      + '<p class="tiny">Mas calma, amanhã tem mais! 😎💈</p>'
-      + '<p class="tiny">📅 Garanta já o seu horário para amanhã! Atendemos das ' + abreTxt + ' às ' + fechaTxt + ', esperando por você para aquele corte na régua! 🔥💇‍♂️</p>'
-      + '<p class="tiny">👇 Desça a página e marque seu horário!</p>'
-      + '<p class="tiny">Sua melhor versão começa com um bom corte! 🚀💈</p>';
-    const hintF = $('busyHint');
-    if (hintF) hintF.textContent = '🔴 Fechado agora — não é possível agendar hoje.';
-    const btnR = $('btnReservarHoje');
-    if (btnR) btnR.style.display = 'none';
-    return;
-  }
-  if (fechadoAgora && !isToday) {
-    // fechado agora, mas outro dia: mostra normal (a loja pode abrir de novo)
-  }
+  // o barbeiro FECHOU a loja no painel: hoje a grade aparece toda em vermelho
+  const fechadoHoje = isToday && statusLoja.modo === 'manual' && statusLoja.aberto !== true;
   // o barbeiro forcou ABERTO: hoje o horario da janela nao bloqueia (só vence o que passou)
   const forcouAberto = isToday && statusLoja.modo === 'manual' && statusLoja.aberto === true;
   const abreM = minutosDe(abreAsLoja());
@@ -304,25 +285,33 @@ async function renderTimes() {
     const expired = isToday && slotMinutes < currentMinutes;
     // fora do horario definido pelo barbeiro no painel
     if (slotMinutes < abreM || slotMinutes > fechaM) return '';
+    // fechado hoje: mostra a grade inteira, toda em vermelho e sem poder agendar
+    if (fechadoHoje) return `<button class="slot fechado" data-t="${t}">${t}</button>`;
     if (expired && !forcouAberto) return '';   // forcou aberto: mostra tudo, mesmo o que ja passou
     return `<button class="slot ${t === time ? 'selected' : ''} ${busy ? 'busy' : ''}" ${busy ? 'disabled' : ''} data-t="${t}">${t}</button>`;
   }).join('');
-  box.querySelectorAll('.slot:not(.busy)').forEach((el) => {
+  box.querySelectorAll('.slot:not(.busy):not(.fechado)').forEach((el) => {
     el.onclick = async () => {
       time = el.dataset.t || el.textContent.trim();
       await renderTimes();
       renderResume();
     };
   });
+  // horario em vermelho (loja fechada): avisa em vez de selecionar
+  box.querySelectorAll('.slot.fechado').forEach((el) => {
+    el.onclick = () => toast('🔴 Fechado hoje — escolha outra data.');
+  });
   const hint = $('busyHint');
-  const total = box.querySelectorAll('.slot').length;
+  const total = box.querySelectorAll('.slot:not(.busy):not(.fechado)').length;
   const faixa = `${abreAsLoja()}–${fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja()}`;
   if (hint) {
-    hint.textContent = !total
-      ? 'Não há mais horários livres neste dia. Escolha outra data.'
-      : isToday
-        ? `Horário de funcionamento: ${faixa}. Mostrando só os horários que ainda vão acontecer hoje. ${total} vaga(s) livre(s).`
-        : `Horário de funcionamento: ${faixa}. ${total} horário(s) disponível(is) neste dia.`;
+    hint.textContent = fechadoHoje
+      ? `Horário de funcionamento: ${faixa}. 🔴 Fechado agora — não é possível agendar hoje.`
+      : !total
+        ? 'Não há mais horários livres neste dia. Escolha outra data.'
+        : isToday
+          ? `Horário de funcionamento: ${faixa}. Mostrando só os horários que ainda vão acontecer hoje. ${total} vaga(s) livre(s).`
+          : `Horário de funcionamento: ${faixa}. ${total} horário(s) disponível(is) neste dia.`;
   }
 }
 
