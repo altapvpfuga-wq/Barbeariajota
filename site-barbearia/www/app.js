@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.27',
+  APP_VERSION: '1.0.28',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -304,7 +304,7 @@ async function renderTimes() {
     const expired = isToday && slotMinutes < currentMinutes;
     // fora do horario definido pelo barbeiro no painel
     if (slotMinutes < abreM || slotMinutes > fechaM) return '';
-    if (expired) return '';
+    if (expired && !forcouAberto) return '';   // forcou aberto: mostra tudo, mesmo o que ja passou
     return `<button class="slot ${t === time ? 'selected' : ''} ${busy ? 'busy' : ''}" ${busy ? 'disabled' : ''} data-t="${t}">${t}</button>`;
   }).join('');
   box.querySelectorAll('.slot:not(.busy)').forEach((el) => {
@@ -1433,9 +1433,11 @@ async function renderToday() {
     if (fechaMA <= abreMA) fechaMA += 24 * 60;
     // quando o barbeiro ABRE na mao, os horarios que aparecem sao os da
     // janela de funcionamento (de abrir ate fechar), so os que ainda vao acontecer
+    // quando o barbeiro ABRE na mao, mostra TODOS os horarios da janela
+    // (de abrir ate fechar), mesmo os que ja passaram — o barbeiro decidiu
     const futurasAberto = TIME_SLOTS.filter((t) => {
       const m = slotMinutesOf(t);
-      return m > mins && m >= abreMA && m <= fechaMA;
+      return m >= abreMA && m <= fechaMA;
     });
     if (!futurasAberto.length) {
       box.innerHTML = '<span class="open-big">🟢 Aberto</span><p class="tiny">Acabaram as vagas de hoje — amanhã abre às ' + abreAsLoja() + '</p>';
