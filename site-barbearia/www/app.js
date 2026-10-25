@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL â€” edite aqui =====
 const CONFIG = {
   // VersÃ£o do aplicativo. Aumente este nÃºmero toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.34',
+  APP_VERSION: '1.0.35',
 
   // RepositÃ³rio do GitHub onde os APK sÃ£o publicados.
   // Precisa ser PUBLICO, senÃ£o o aplicativo nÃ£o consegue ler as versÃµes.
@@ -1443,6 +1443,24 @@ async function renderToday() {
   label.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
     + ' Â· Aberto ' + abreHoje + 'â€“' + fechaTxt;
 
+  // o barbeiro forcou o FECHAMENTO: mostra a msg de fechado (sem horarios, sem botao de reservar)
+  const fechadoAgoraHoje = statusLoja.modo === 'manual' && statusLoja.aberto !== true;
+  if (fechadoAgoraHoje && isToday) {
+    const abreTxt = abreAsLoja();
+    const fechaTxt = fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja();
+    box.innerHTML = '<span class="closed-big">🔴 Fechado agora</span>'
+      + '<p class="tiny">Acabaram as vagas de hoje</p>'
+      + '<p class="tiny">marque uma vaga pra manhã — a barbearia abre de ' + abreTxt + ' às ' + fechaTxt + ' 🎉✂️ As vagas de hoje já se esgotaram!</p>'
+      + '<p class="tiny">Mas calma, amanhã tem mais! 😎💈</p>'
+      + '<p class="tiny">📅 Garanta já o seu horário para amanhã! Atendemos das ' + abreTxt + ' às ' + fechaTxt + ', esperando por você para aquele corte na régua! 🔥💇‍♂️</p>'
+      + '<p class="tiny">👇 Desça a página e marque seu horário!</p>'
+      + '<p class="tiny">Sua melhor versão começa com um bom corte! 🚀💈</p>';
+    const hintF = $('busyHint');
+    if (hintF) hintF.textContent = '🔴 Fechado agora — não é possível agendar hoje.';
+    const btnR = $('btnReservarHoje');
+    if (btnR) btnR.style.display = 'none';
+    return;
+  }
   // o barbeiro forcou ABERTO: a loja esta aberta agora, mesmo fora do horario de sempre
   if (statusLoja.modo === 'manual' && statusLoja.aberto === true) {
     const abreHoje = abreAsLoja();
