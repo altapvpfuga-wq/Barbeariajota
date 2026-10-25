@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.28',
+  APP_VERSION: '1.0.29',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -272,19 +272,17 @@ async function renderTimes() {
   // o barbeiro forcou o fechamento pelo painel
   const fechadoAgora = statusLoja.modo === 'manual' && statusLoja.aberto === false;
   if (fechadoAgora && isToday) {
-    // a loja esta fechada AGORA: os horarios do dia de hoje aparecem em
-    // VERMELHO (nao da para marcar), mas os outros dias ficam normais
-    const abreM2 = minutosDe(abreAsLoja());
-    let fechaM2 = minutosDe(fechaAsLoja());
-    if (fechaM2 <= abreM2) fechaM2 += 24 * 60;
-    box.innerHTML = TIME_SLOTS.map((t) => {
-      const [h, m] = t.split(':').map(Number);
-      const slotMinutes = h * 60 + m;
-      if (slotMinutes < abreM2 || slotMinutes > fechaM2) return '';
-      return `<button class="slot busy" disabled>${t}</button>`;
-    }).join('');
+    const abreTxt = abreAsLoja();
+    const fechaTxt = fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja();
+    box.innerHTML = '<span class="closed-big">🔴 Fechado agora</span>'
+      + '<p class="tiny">Acabaram as vagas de hoje</p>'
+      + '<p class="tiny">marque uma vaga pra manhã — a barbearia abre de ' + abreTxt + ' às ' + fechaTxt + ' 🎉✂️ As vagas de hoje já se esgotaram!</p>'
+      + '<p class="tiny">Mas calma, amanhã tem mais! 😎💈</p>'
+      + '<p class="tiny">📅 Garanta já o seu horário para amanhã! Atendemos das ' + abreTxt + ' às ' + fechaTxt + ', esperando por você para aquele corte na régua! 🔥💇‍♂️</p>'
+      + '<p class="tiny">👇 Desça a página e marque seu horário!</p>'
+      + '<p class="tiny">Sua melhor versão começa com um bom corte! 🚀💈</p>';
     const hintF = $('busyHint');
-    if (hintF) hintF.textContent = '🔴 A barbearia está fechada agora — não é possível agendar hoje.';
+    if (hintF) hintF.textContent = '🔴 Fechado agora — não é possível agendar hoje.';
     return;
   }
   if (fechadoAgora && !isToday) {
@@ -824,6 +822,14 @@ let statusLoja = ((tem) => {
 
 // aplica o status novo e redesenha a loja na hora
 function aplicarStatusLoja(s) {
+  // evita re-render se for identico (mas sempre aplica se os horarios mudaram)
+  const horasMudaram = (s.abreAs && s.abreAs !== statusLoja.abreAs)
+    || (s.fechaAs && s.fechaAs !== statusLoja.fechaAs)
+    || (s.modo && s.modo !== statusLoja.modo)
+    || (s.aberto !== undefined && s.aberto !== statusLoja.aberto);
+  const tsNovo = Number(s.ts) || 0;
+  const tsAtual = Number(statusLoja.ts) || 0;
+  if (!horasMudaram && tsNovo <= tsAtual && statusLoja.ok) return;
   statusLoja = { ...s, ok: true };
   try { localStorage.setItem('barbearia_status_loja_v1', JSON.stringify(statusLoja)); } catch { /* ignora */ }
   renderToday();
@@ -841,7 +847,12 @@ async function processarCanal(texto) {
     try { p = JSON.parse(o.message); } catch { continue; }
     if (p && p.t === 's' && p.s) {
       // mudanca de aberto/fechado do barbeiro
-      if ((Number(p.s.ts) || 0) > (Number(statusLoja.ts) || 0)) aplicarStatusLoja(p.s);
+      const tsNovo = Number(p.s.ts) || 0;
+    const tsAtual = Number(statusLoja.ts) || 0;
+    const horasMudaram = (p.s.abreAs && p.s.abreAs !== statusLoja.abreAs)
+      || (p.s.fechaAs && p.s.fechaAs !== statusLoja.fechaAs)
+      || (p.s.modo && p.s.modo !== statusLoja.modo);
+    if (horasMudaram || tsNovo > tsAtual) aplicarStatusLoja(p.s);
     } else if (p && p.t === 'e' && p.b && p.b.id) {
       // a barbearia EDITOU o agendamento (dia/hora/etc): atualiza aqui na hora
       const atual = loadBookings().find((b) => b.id === p.b.id);
