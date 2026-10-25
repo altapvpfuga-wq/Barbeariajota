@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.25',
+  APP_VERSION: '1.0.27',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -303,7 +303,7 @@ async function renderTimes() {
     const busy = list.some((b) => b.dateKey === dayKey && b.time === t && bookingHoldsSlot(b));
     const expired = isToday && slotMinutes < currentMinutes;
     // fora do horario definido pelo barbeiro no painel
-    if (!forcouAberto && (slotMinutes < abreM || slotMinutes > fechaM)) return '';
+    if (slotMinutes < abreM || slotMinutes > fechaM) return '';
     if (expired) return '';
     return `<button class="slot ${t === time ? 'selected' : ''} ${busy ? 'busy' : ''}" ${busy ? 'disabled' : ''} data-t="${t}">${t}</button>`;
   }).join('');
@@ -316,12 +316,13 @@ async function renderTimes() {
   });
   const hint = $('busyHint');
   const total = box.querySelectorAll('.slot').length;
+  const faixa = `${abreAsLoja()}–${fechaAsLoja() === '00:00' ? '00:00 (meia-noite)' : fechaAsLoja()}`;
   if (hint) {
     hint.textContent = !total
       ? 'Não há mais horários livres neste dia. Escolha outra data.'
       : isToday
-        ? `Mostrando só os horários que ainda vão acontecer hoje. ${total} vaga(s) livre(s).`
-        : `${total} horário(s) disponível(is) neste dia.`;
+        ? `Horário de funcionamento: ${faixa}. Mostrando só os horários que ainda vão acontecer hoje. ${total} vaga(s) livre(s).`
+        : `Horário de funcionamento: ${faixa}. ${total} horário(s) disponível(is) neste dia.`;
   }
 }
 
@@ -1409,7 +1410,11 @@ async function renderToday() {
   const hojeKey = toKey(now.getFullYear(), now.getMonth(), now.getDate());
   const mins = now.getHours() * 60 + now.getMinutes();
 
-  label.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+  const abreHoje = abreAsLoja();
+  const fechaHoje = fechaAsLoja();
+  const fechaTxt = fechaHoje === '00:00' ? '00:00 (meia-noite)' : fechaHoje;
+  label.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+    + ' · Aberto ' + abreHoje + '–' + fechaTxt;
 
   // o barbeiro forcou o fechamento pelo painel
   if (statusLoja.modo === 'manual' && statusLoja.aberto === false) {
@@ -1418,8 +1423,20 @@ async function renderToday() {
   }
   // o barbeiro forcou ABERTO: a loja esta aberta agora, mesmo fora do horario de sempre
   if (statusLoja.modo === 'manual' && statusLoja.aberto === true) {
-    label.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
-    const futurasAberto = TIME_SLOTS.filter((t) => slotMinutesOf(t) > mins);
+    const abreHoje = abreAsLoja();
+  const fechaHoje = fechaAsLoja();
+  const fechaTxt = fechaHoje === '00:00' ? '00:00 (meia-noite)' : fechaHoje;
+  label.textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+    + ' · Aberto ' + abreHoje + '–' + fechaTxt;
+    const abreMA = minutosDe(abreAsLoja());
+    let fechaMA = minutosDe(fechaAsLoja());
+    if (fechaMA <= abreMA) fechaMA += 24 * 60;
+    // quando o barbeiro ABRE na mao, os horarios que aparecem sao os da
+    // janela de funcionamento (de abrir ate fechar), so os que ainda vao acontecer
+    const futurasAberto = TIME_SLOTS.filter((t) => {
+      const m = slotMinutesOf(t);
+      return m > mins && m >= abreMA && m <= fechaMA;
+    });
     if (!futurasAberto.length) {
       box.innerHTML = '<span class="open-big">🟢 Aberto</span><p class="tiny">Acabaram as vagas de hoje — amanhã abre às ' + abreAsLoja() + '</p>';
       return;
