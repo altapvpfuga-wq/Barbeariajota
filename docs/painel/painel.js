@@ -897,6 +897,36 @@ if ($('tPresente')) $('tPresente').onclick = () => ligarNatal('presente', !statu
 // ============================================================
 //  INICIO
 // ============================================================
+// ===== NOTIFICACOES PUSH (FCM) =====
+async function registrarPushPainel() {
+  try {
+    if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+    const PushNotifications = window.Capacitor.Plugins.PushNotifications;
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive !== 'granted') return;
+    await PushNotifications.register();
+    PushNotifications.addListener('registration', async (token) => {
+      try {
+        await fetch(apiBaseAtual + '/api/push-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token.value, app: 'painel', version: CONFIG.APP_VERSION }),
+        });
+      } catch { /* sem internet, tenta depois */ }
+    });
+    PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      toast(notification.title || 'Nova notificacao');
+    });
+    PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+      if (notification.notification.data && notification.notification.data.tipo === 'atualizacao') {
+        checarAtualizacao({ silencioso: false });
+      }
+    });
+  } catch (e) {
+    console.warn('[push] erro ao registrar:', e.message);
+  }
+}
+
 window.addEventListener('load', () => {
   window.scrollTo(0, 0);
   pintarStatus();       // status salvo aparece na hora
@@ -925,5 +955,7 @@ window.addEventListener('load', () => {
   if (ehApk) {
     setTimeout(() => checarAtualizacao({ silencioso: true }), 1000);
     setInterval(() => checarAtualizacao({ silencioso: true }), 2 * 60 * 1000);
+    // registra push notifications para receber notificacoes com o app fechado
+    setTimeout(() => registrarPushPainel(), 2000);
   }
 });

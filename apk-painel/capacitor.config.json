@@ -1,0 +1,8 @@
+{
+    "appId":  "com.barbeariadojota.painel",
+    "webDir":  "www",
+    "appName":  "Painel Barbearia",
+    "server":  {
+                   "androidScheme":  "https"
+               }
+}

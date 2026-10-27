@@ -21,6 +21,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const admin = require('firebase-admin');
 
 // le o .env de onde este arquivo esta, nao de onde o comando foi digitado
 require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -30,6 +31,18 @@ const cors = require('cors');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
+
+// ---------- Firebase Admin (push notifications) ----------
+let firebaseOk = false;
+try {
+  const serviceAccount = require(path.join(__dirname, 'firebase-service-account.json'));
+  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  firebaseOk = true;
+  console.log('[firebase] inicializado com sucesso');
+} catch (e) {
+  console.warn('[firebase] nao inicializado:', e.message);
+  console.warn('[firebase] coloque o arquivo firebase-service-account.json na pasta backend/');
+}
 
 // ---------- configuracoes (todas no .env) ----------
 const MODO = (process.env.MODO_PAGAMENTO || 'link_unico').trim();   // link_unico | link_fixo
@@ -461,6 +474,113 @@ app.post('/api/webhook/infinitypay', (req, res) => {
     console.log(`[webhook] ${achado.bookingId} pago=${pago}`);
   } catch (e) { console.error('[webhook]', e.message); }
 });
+
+// ============================================================
+//  PUSH NOTIFICATIONS (FCM): recebe tokens e envia notificacoes
+// ============================================================
+const PUSH_TOKENS_FILE = path.join(__dirname, 'push-tokens.json');
+function loadPushTokens() {
+  try {
+    if (!fs.existsSync(PUSH_TOKENS_FILE)) return [];
+    const d = JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf8'));
+    return Array.isArray(d) ? d : [];
+  } catch { return []; }
+}
+function savePushTokens(tokens) {
+  try { fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(tokens, null, 2)); }
+  catch (e) { console.error('[push] erro ao salvar tokens:', e.message); }
+}
+
+// recebe o token FCM do app
+app.post('/api/push-token', (req, res) => {
+  const { token, app, version } = req.body || {};
+  if (!token) return res.status(400).json({ error: 'token obrigatorio' });
+  const tokens = loadPushTokens();
+  const idx = tokens.findIndex((t) => t.token === token);
+  const entry = { token, app: app || 'desconhecido', version: version || '0', atualizadoEm: new Date().toISOString() };
+  if (idx >= 0) tokens[idx] = entry;
+  else tokens.push(entry);
+  savePushTokens(tokens);
+  res.json({ ok: true });
+});
+
+// envia push notification para todos os tokens registrados
+async function enviarPush(titulo, corpo, dados) {
+  if (!firebaseOk) return;
+  const tokens = loadPushTokens();
+  if (tokens.length === 0) return;
+  const tokenList = tokens.map((t) => t.token);
+  try {
+    const msg = {
+      notification: { title: titulo, body: corpo },
+      data: dados || {},
+      tokens: tokenList,
+    };
+    const resp = await admin.messaging().sendEachForMulticast(msg);
+    console.log(`[push] enviado: ${resp.successCount} ok, ${resp.failureCount} falhas`);
+    // remove tokens invalidos
+    const novos = [];
+    resp.responses.forEach((r, i) => {
+      if (r.success) novos.push(tokens[i]);
+      else if (r.error && r.error.code !== 'messaging/registration-token-not-registered') novos.push(tokens[i]);
+    });
+    savePushTokens(novos);
+  } catch (e) {
+    console.error('[push] erro:', e.message);
+  }
+}
+
+// endpoint para enviar notificacao de atualizacao manualmente
+app.post('/api/push-atualizacao', (req, res) => {
+  const { pin, versao } = req.body || {};
+  if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
+  enviarPush('Atualização disponível!', `Nova versão ${versao || 'disponível'}. Toque para atualizar.`, { tipo: 'atualizacao', versao: versao || '' });
+  res.json({ ok: true });
+});
+
+// verifica GitHub a cada 5 minutos e envia push se houver nova versao
+const ULTIMA_VERSAO_FILE = path.join(__dirname, 'ultima-versao-notificada.json');
+let ultimaVersaoNotificada = null;
+try {
+  if (fs.existsSync(ULTIMA_VERSAO_FILE)) {
+    ultimaVersaoNotificada = JSON.parse(fs.readFileSync(ULTIMA_VERSAO_FILE, 'utf8')).versao || null;
+  }
+} catch { /* ignora */ }
+
+async function checarAtualizacaoGitHub() {
+  if (!firebaseOk) return;
+  try {
+    const r = await fetch('https://api.github.com/repos/Surtadoo/barbearia-do-jota/releases/latest', {
+      headers: { 'User-Agent': 'barbearia-backend' },
+    });
+    if (!r.ok) return;
+    const rel = await r.json();
+    const versao = String(rel.tag_name || '').replace(/^v/i, '');
+    if (!versao) return;
+    // primeira vez: apenas registra, nao notifica
+    if (ultimaVersaoNotificada === null) {
+      ultimaVersaoNotificada = versao;
+      try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
+      return;
+    }
+    if (versao !== ultimaVersaoNotificada) {
+      ultimaVersaoNotificada = versao;
+      try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
+      // envia push notification para todos os apps registrados
+      enviarPush(
+        'Atualização disponível!',
+        `Nova versão ${versao} do app disponível. Toque para atualizar.`,
+        { tipo: 'atualizacao', versao }
+      );
+      console.log(`[push] notificacao de atualizacao v${versao} enviada`);
+    }
+  } catch (e) {
+    console.warn('[push] erro ao checar GitHub:', e.message);
+  }
+}
+// checa a cada 5 minutos
+setInterval(checarAtualizacaoGitHub, 5 * 60 * 1000);
+setTimeout(checarAtualizacaoGitHub, 10000);
 
 app.listen(PORT, () => {
   console.log(`\n  Barbearia do Jota - servidor na porta ${PORT}`);

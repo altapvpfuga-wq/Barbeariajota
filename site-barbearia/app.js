@@ -1927,6 +1927,43 @@ function ajustarTarjaDoTopo() {
   }
 }
 
+// ===== NOTIFICACOES PUSH (FCM) =====
+// Registra o token FCM no servidor para receber notificacoes mesmo com o app fechado
+async function registrarPush() {
+  try {
+    if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
+    const PushNotifications = window.Capacitor.Plugins.PushNotifications;
+    // pede permissao
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive !== 'granted') return;
+    // registra no FCM
+    await PushNotifications.register();
+    // quando o token chegar, envia para o servidor
+    PushNotifications.addListener('registration', async (token) => {
+      try {
+        await fetch(apiBaseAtual + '/api/push-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token.value, app: 'cliente', version: CONFIG.APP_VERSION }),
+        });
+      } catch { /* sem internet, tenta depois */ }
+    });
+    // quando uma notificacao chegar com o app aberto
+    PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      toast(notification.title || 'Nova notificacao');
+    });
+    // quando o usuario toca na notificacao
+    PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+      // se for notificacao de atualizacao, abre o popup
+      if (notification.notification.data && notification.notification.data.tipo === 'atualizacao') {
+        checarAtualizacao({ silencioso: false });
+      }
+    });
+  } catch (e) {
+    console.warn('[push] erro ao registrar:', e.message);
+  }
+}
+
 // ===== iniciar =====
 window.addEventListener('load', () => {
   window.scrollTo(0, 0);
@@ -1967,6 +2004,11 @@ window.addEventListener('load', () => {
   window.scrollTo(0, 0);
   setTimeout(() => window.scrollTo(0, 0), 100);
   setTimeout(() => window.scrollTo(0, 0), 500);
+  // registra push notifications (FCM) para receber notificacoes com o app fechado
+  const ehApkPush = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  if (ehApkPush) {
+    setTimeout(() => registrarPush(), 2000);
+  }
   // procura versao nova no GitHub (silencioso: so mostra se existir)
   // so dentro do aplicativo (APK), nao no navegador
   // so dentro do aplicativo (APK), nao no navegador

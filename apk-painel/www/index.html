@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Painel — Barbearia do Jota</title>
+  <!-- iPhone / iPad: instalar na tela de inicio (Add to Home Screen) -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Painel Jota" />
+  <meta name="theme-color" content="#C9A227" />
+  <link rel="apple-touch-icon" href="icone-iphone.png" />
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* ===== painel — gem de leitura simples ===== */
+    .painel-wrap{max-width:640px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:14px}
+
+    /* o site empilha o topo no celular — no painel tem que ficar em linha */
+    .topbar-inner{flex-direction:row;align-items:center;justify-content:space-between}
+
+    /* status: a pergunta e a resposta GRANDE */
+    .card.st-card{display:block;cursor:default;padding:18px}
+    .pergunta{text-align:center;color:var(--muted);font-size:14px;margin:0 0 8px;font-weight:600}
+    .st-grande{display:flex;align-items:center;justify-content:center;gap:10px;
+      border-radius:14px;padding:18px 10px;font-size:22px;font-weight:900;letter-spacing:.5px}
+    .st-grande.ok{background:rgba(34,197,94,.12);color:var(--green);border:2px solid var(--green)}
+    .st-grande.no{background:rgba(239,68,68,.10);color:var(--red);border:2px solid var(--red)}
+    .st-detalhe{text-align:center;color:var(--muted);font-size:12px;margin:8px 0 0}
+
+    .botoes-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+    .btn-status{border:2px solid var(--border);border-radius:12px;padding:14px 6px;background:#141418;
+      color:var(--muted);font-weight:800;font-size:14px;cursor:pointer;line-height:1.2}
+    .btn-status small{display:block;font-size:11px;font-weight:600;margin-top:3px}
+    .btn-status.aberto.on{border-color:var(--green);background:rgba(34,197,94,.15);color:var(--green)}
+    .btn-status.fechado.on{border-color:var(--red);background:rgba(239,68,68,.12);color:var(--red)}
+    .btn-auto{width:100%;margin-top:10px;background:transparent;border:1px dashed var(--border);
+      color:var(--muted);font-size:12px;padding:7px 12px;border-radius:8px;cursor:pointer}
+    .btn-auto.on{border-style:solid;border-color:var(--gold);color:var(--gold)}
+    .btn-auto:hover{border-color:var(--gold);color:var(--gold)}
+
+    /* horarios */
+    .titulo-sec{font-size:15px;font-weight:800;margin:0 0 2px}
+    .explica{color:var(--muted);font-size:12px;margin:0 0 10px}
+    .horas{display:flex;gap:10px;justify-content:center;align-items:flex-end;flex-wrap:wrap}
+    .horas .campo{display:flex;flex-direction:column;gap:4px;text-align:left}
+    .horas label{font-size:12px;color:var(--muted)}
+    .horas input{background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:16px;color-scheme:dark;min-width:104px}
+    .horas .ate{color:var(--muted);font-size:13px;padding-bottom:12px}
+
+    /* agendamentos */
+    .ag-titulo-row{display:flex;align-items:baseline;gap:10px}
+    .ag-titulo{font-size:15px;font-weight:800;margin:0}
+    .chip-conta{font-size:12px;color:var(--muted)}
+    .grupo{margin:14px 0 6px;font-size:13px;font-weight:800;color:var(--gold);border-bottom:1px solid var(--border);padding-bottom:5px}
+    .grupo.pequeno{color:var(--muted);border-bottom-style:dashed}
+    .ag{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;gap:12px;align-items:center}
+    .ag + .ag{margin-top:8px}
+    .ag.novo{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+    .ag-hora{background:#141418;border:1px solid var(--border);border-radius:10px;min-width:56px;text-align:center;padding:8px 4px;font-size:17px;font-weight:900}
+    .ag-meio{min-width:0}
+    .ag-meio b{display:block;font-size:15px}
+    .ag-meio small{color:var(--muted);display:block;font-size:12px;line-height:1.5}
+    .wpp-mini{color:var(--green);text-decoration:none;font-weight:700;font-size:12px;display:inline-block;margin-top:3px}
+    .ag-lado{margin-left:auto;display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0}
+    .btn-pago{border:1px solid var(--green);background:rgba(34,197,94,.10);color:var(--green);
+      font-weight:800;font-size:11px;border-radius:8px;padding:6px 8px;cursor:pointer;white-space:nowrap}
+    .btn-pago:active{background:var(--green);color:#111}
+    .mini-acoes{display:flex;gap:6px;margin-top:5px}
+    .btn-mini{border:1px solid var(--border);background:transparent;color:var(--muted);
+      font-weight:700;font-size:11px;border-radius:8px;padding:5px 8px;cursor:pointer;white-space:nowrap}
+    .btn-mini:active{border-color:var(--gold);color:var(--gold)}
+    .btn-mini.perigo:active{border-color:var(--red);color:var(--red)}
+    /* linhas liga/desliga nos ajustes (neve, presente de natal) */
+    .linha-cfg{display:flex;align-items:center;justify-content:space-between;gap:10px;
+      margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#141418}
+    .linha-cfg span{font-size:13px;font-weight:700}
+    .toggle{border:1px solid var(--border);background:transparent;color:var(--muted);
+      font-weight:800;font-size:12px;border-radius:999px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+    .toggle.on{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.12)}
+    /* botao vermelho de excluir */
+    .btn-perigo{background:rgba(239,68,68,.15);border:2px solid var(--red);color:var(--red);
+      font-weight:800;border-radius:12px;padding:13px 10px;cursor:pointer}
+    .btn-perigo:active{background:var(--red);color:#111}
+    .badge{font-size:11px;font-weight:800;border-radius:999px;padding:4px 9px;white-space:nowrap}
+    .badge.pago{background:rgba(34,197,94,.15);color:var(--green)}
+    .badge.espera{background:rgba(245,158,11,.15);color:#f59e0b}
+    .badge.dinheiro{background:rgba(201,162,39,.12);color:var(--gold)}
+    .preco{color:var(--text);font-weight:800;font-size:13px}
+    .vazio{color:var(--muted);text-align:center;padding:26px 8px;border:1px dashed var(--border);border-radius:12px}
+
+    .modal-card{max-height:88vh;overflow:auto}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <img id="logoTec" src="logo.svg" alt="logo" width="34" height="34">
+        <div>
+          <strong>Painel do Barbeiro</strong>
+          <span>Barbearia do Jota</span>
+        </div>
+      </div>
+      <button id="btnCfg" class="nav-ico" aria-label="Ajustes" title="Ajustes">⚙️</button>
+    </div>
+  </header>
+
+  <main class="painel-wrap">
+
+    <!-- 1. ABERTO OU FECHADO -->
+    <div class="card st-card">
+      <p class="pergunta">Sua barbearia está <b>aberta agora</b>?</p>
+      <div id="stGrande" class="st-grande no">—</div>
+      <div class="botoes-2">
+        <button id="mAberto" class="btn-status aberto">🟢 ESTOU ABERTO<small>receber clientes</small></button>
+        <button id="mFechado" class="btn-status fechado">🔴 ESTOU FECHADO<small>bloquear agendamento</small></button>
+      </div>
+      <button id="mAuto" class="btn-auto">↩️ Voltar para o horário automático (abre e fecha sozinho)</button>
+      <p class="st-detalhe" id="stAviso">—</p>
+    </div>
+
+    <!-- 2. HORARIO DE FUNCIONAMENTO -->
+    <div class="card st-card">
+      <p class="titulo-sec">⏰ Horário de funcionamento</p>
+      <p class="explica">O cliente só consegue agendar entre esses horários. Vale todo dia (menos segunda).</p>
+      <div class="horas">
+        <div class="campo">
+          <label>Abre às</label>
+          <input id="inpAbre" type="time" value="09:00">
+        </div>
+        <span class="ate">até</span>
+        <div class="campo">
+          <label>Fecha às</label>
+          <input id="inpFecha" type="time" value="21:00">
+        </div>
+        <button id="btnSalvarHoras" class="btn btn-gold btn-sm">💾 Salvar</button>
+        <button id="btnMeiaNoite" class="btn btn-ghost btn-sm" title="Ficar aberto até meia-noite">🌙 Até meia-noite</button>
+      </div>
+      <p class="explica" style="margin-top:8px">Dica: se quiser ficar aberto até meia-noite, use <b>00:00</b> em "Fecha às" (ou toque no botão acima).</p>
+    </div>
+
+    <!-- 3. AGENDAMENTOS -->
+    <section>
+      <div class="ag-titulo-row">
+        <p class="ag-titulo" style="font-size:17px">📋 Agendamentos</p>
+        <span id="agContador" class="chip-conta">—</span>
+      </div>
+      <div id="listaAg"><div class="vazio">Carregando...</div></div>
+    </section>
+  </main>
+
+  <!-- ajustes -->
+  <div id="modalCfg" class="modal hidden">
+    <div class="modal-card" style="text-align:left">
+      <h2 style="text-align:center">⚙️ Ajustes</h2>
+      <p class="tiny" style="text-align:center">Versão do aplicativo: <b id="painelVersao">—</b></p>
+      <p class="tiny" style="text-align:center;margin-top:4px">Os agendamentos chegam sozinhos pela internet — o PC não precisa estar ligado.</p>
+      <label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">Endereço do servidor no PC (opcional, só para o Pix automático)</label>
+      <input id="inpServidorPainel" placeholder="http://192.168.1.73:3001" inputmode="url"
+             style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">PIN do painel</label>
+      <input id="inpPin" placeholder="1234" inputmode="numeric"
+             style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box">
+      <p class="tiny" id="cfgAviso" style="margin-top:8px">—</p>
+      <div class="linha-cfg">
+        <span>❄️ Neve + 🎃 Halloween no app do cliente</span>
+        <button id="tNeve" class="toggle">⚫ Desligado</button>
+      </div>
+      <div class="linha-cfg">
+        <span>🎁 Presente de Natal no app do cliente</span>
+        <button id="tPresente" class="toggle">⚫ Desligado</button>
+      </div>
+      <button id="btnSalvarCfg" class="btn btn-gold btn-block">💾 Salvar</button>
+      <button id="btnVerificarUpdate" class="btn btn-ghost btn-block">⬇️ Baixar a versão atualizada do APK</button>
+      <p class="tiny" id="updStatus">—</p>
+      <button id="btnFecharCfg" class="btn btn-ghost btn-block">Fechar</button>
+    </div>
+  </div>
+
+  <!-- atualizacao -->
+  <div id="modalUpdate" class="modal hidden">
+    <div class="modal-card">
+      <h2>🔁 Nova versão do Painel</h2>
+      <p class="tiny" id="updVersao">—</p>
+      <p class="tiny" id="updAtual">—</p>
+      <div id="updNotas" class="tiny" style="text-align:left;margin:10px 0">—</div>
+      <button id="btnAtualizar" class="btn btn-gold btn-block">⬇️ Atualizar agora</button>
+      <button id="btnDepois" class="btn btn-ghost btn-block">Depois</button>
+    </div>
+  </div>
+
+  <!-- confirmar exclusao -->
+  <div id="modalExcluir" class="modal hidden">
+    <div class="modal-card" style="text-align:center">
+      <h2>🗑️ Excluir agendamento?</h2>
+      <p class="tiny" id="excluirTexto" style="margin:10px 0">—</p>
+      <button id="btnConfirmarExcluir" class="btn btn-perigo btn-block">🗑️ Sim, excluir</button>
+      <button id="btnCancelarExcluir" class="btn btn-ghost btn-block">Não, cancelar</button>
+    </div>
+  </div>
+
+  <!-- editar agendamento -->
+  <div id="modalEditar" class="modal hidden">
+    <div class="modal-card" style="text-align:left">
+      <h2 style="text-align:center">✏️ Editar agendamento</h2>
+      <p class="tiny" style="text-align:center;margin-bottom:8px">Ao salvar, o agendamento muda na hora no aplicativo e no site do cliente.</p>
+      <label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">Nome do cliente</label>
+      <input id="eNome" style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">WhatsApp</label>
+      <input id="eFone" inputmode="tel" placeholder="(21) 90000-0000" style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-top:10px">Serviço</label>
+      <input id="eServico" style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box">
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Dia</label>
+          <input id="eDia" type="date" style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box;color-scheme:dark">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Hora</label>
+          <input id="eHora" type="time" style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box;color-scheme:dark">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <div style="flex:1">
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Preço (R$)</label>
+          <input id="ePreco" type="number" inputmode="decimal" min="0" step="1" style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box">
+        </div>
+        <div style="flex:2">
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Observação</label>
+          <input id="eObs" style="width:100%;background:#141418;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;box-sizing:border-box">
+        </div>
+      </div>
+      <button id="btnSalvarEditar" class="btn btn-gold btn-block" style="margin-top:14px">💾 Salvar alterações</button>
+      <button id="btnFecharEditar" class="btn btn-ghost btn-block">Cancelar</button>
+    </div>
+  </div>
+
+  <script src="painel.js?v=40"></script>
+</body>
+</html>
