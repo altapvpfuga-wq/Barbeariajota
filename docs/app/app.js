@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.39',
+  APP_VERSION: '1.0.40',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -1821,6 +1821,7 @@ $('btnCopiarChave').onclick = async () => {
 function jaPagueiAvisar() {
   const b = pixBooking;
   if (!b) { toast('Complete o agendamento primeiro.'); return; }
+  if (b.pixStatus !== 'pago') { toast('Aguarde a confirmação do pagamento.'); return; }
   const msg = [
     `Oi! Já paguei o sinal de ${BRL(signalOf(b.price))} via Pix.`,
     `Meu agendamento: ${b.serviceName} — ${b.dateLabel} às ${b.time}.`,
@@ -1833,7 +1834,7 @@ function jaPagueiAvisar() {
   // volta para a tela inicial após avisar
   setTimeout(() => limparEstadoPagamento(), 2000);
 }
-$('btnJaPaguei').onclick = jaPagueiAvisar;
+// btnJaPaguei onclick is set dynamically in renderPixArea (only when payment is confirmed)
 $('btnAvisarPago').onclick = jaPagueiAvisar;
 $('btnCopyPix').onclick = async () => {
   const code = $('pixCode').value;
