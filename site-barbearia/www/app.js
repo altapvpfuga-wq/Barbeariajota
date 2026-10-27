@@ -1123,7 +1123,7 @@ let neveTimer = null;
 let faiscaTimer = null;
 let presenteTimer = null;
 let natalTrocaTimer = null;
-let presenteJaAbriu = false;
+// presenteJaAbriu removido: o modal agora só abre quando o usuário clica no botão do presente.
 
 const NATAL_EMOJIS = ['🎁', '🎄', '✂️', '🎅', '⭐', '🤶', '🔔', '❄️', '🦌', '🍬', '🕯️', '🌟'];
 // o que cai quando o PRESENTE esta ligado (sem neve)
@@ -1168,11 +1168,7 @@ function renderNatal() {
       document.body.appendChild(gift);
       faiscaTimer = setInterval(faiscar, 750);
     }
-    // abre a caixa com "Feliz Natal" uma vez (quando o barbeiro liga o presente)
-    if (!presenteJaAbriu) {
-      presenteJaAbriu = true;
-      setTimeout(() => { if (statusLoja.presente) abrirPresente(); }, 1400);
-    }
+    // (Removido: o modal agora abre apenas quando o status muda de 'false' para 'true' em aplicarStatusLoja)
   } else {
     if (chuva) chuva.remove();
     if (presenteTimer) { clearInterval(presenteTimer); presenteTimer = null; }
@@ -1183,7 +1179,7 @@ function renderNatal() {
     const modalNatal = document.getElementById('modalNatal');
     if (modalNatal) modalNatal.remove();
     if (natalTrocaTimer) { clearInterval(natalTrocaTimer); natalTrocaTimer = null; }
-    presenteJaAbriu = false;
+    // (Removido: não precisa mais resetar presenteJaAbriu)
   }
 }
 
