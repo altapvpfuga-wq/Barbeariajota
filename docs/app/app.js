@@ -113,6 +113,8 @@ function updateBooking(id, patch) {
 function bookingEnd(b) { const dur = getTotalDuration(b.serviceIds || [b.serviceId || 0]); return new Date(`${b.dateKey}T${b.time}:00`).getTime() + dur * 60000; }
 function bookingHoldsSlot(b) {
   if (b.status === 'cancelado' || b.status === 'expirado') return false;
+  // Pix que ainda não foi pago não segura o horário (libera se cancelar)
+  if (b.payMethod === 'pix' && b.pixStatus !== 'pago') return false;
   return new Date() < bookingEnd(b);
 }
 function newId() { return 'BK' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 90 + 10); }
@@ -1377,8 +1379,24 @@ function renderPixArea() {
     $('pixOffline').classList.add('hidden');
     $('pixEspera').innerHTML = '✅ <b>Pagamento confirmado pela InfinitePay</b>';
     $('btnPagarAgora').classList.add('hidden');
-    if ($('btnJaPaguei')) $('btnJaPaguei').classList.add('hidden');
+    // habilita o botão "Já paguei o Pix" e faz ele levar ao WhatsApp
+    if ($('btnJaPaguei')) {
+      $('btnJaPaguei').classList.remove('hidden');
+      $('btnJaPaguei').disabled = false;
+      $('btnJaPaguei').classList.remove('disabled');
+      $('btnJaPaguei').onclick = () => {
+        jaPagueiAvisar();
+        // volta para a tela inicial após avisar
+        setTimeout(() => limparEstadoPagamento(), 1500);
+      };
+    }
     $('pixCode').value = 'PAGAMENTO CONFIRMADO';
+  } else {
+    // desabilita o botão "Já paguei o Pix" até o pagamento ser confirmado
+    if ($('btnJaPaguei')) {
+      $('btnJaPaguei').disabled = true;
+      $('btnJaPaguei').classList.add('disabled');
+    }
   }
 
   const res = $('pixResultado');
@@ -1480,11 +1498,19 @@ async function checarServidor() {
   return false;
 }
 
-// Cliente não pagou (ou desistiu): volta para a etapa 4 sem confirmar nada
+// Cliente não pagou (ou desistiu): remove o agendamento e libera o horário
 function clientNotPaid() {
   pararConferencia();
+  if (pixBooking) {
+    // remove do localStorage
+    saveBookings(loadBookings().filter((b) => b.id !== pixBooking.id));
+    // avisa o painel para remover o agendamento
+    publicarCanal({ t: 'd', b: { id: pixBooking.id } });
+    pixBooking = null;
+  }
   showStep(4);
   renderResume();
+  renderTimes();
 }
 
 // ===== limpa o estado de pagamento ao abrir =====
@@ -1804,6 +1830,8 @@ function jaPagueiAvisar() {
   const wpp = `https://wa.me/${String(CONFIG.BARBER_WHATSAPP).replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
   try { window.open(wpp, '_blank', 'noopener'); } catch { location.href = wpp; }
   toast('Aviso enviado no WhatsApp! A barbearia confirma e sua vaga fica segura.');
+  // volta para a tela inicial após avisar
+  setTimeout(() => limparEstadoPagamento(), 2000);
 }
 $('btnJaPaguei').onclick = jaPagueiAvisar;
 $('btnAvisarPago').onclick = jaPagueiAvisar;

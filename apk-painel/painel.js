@@ -306,7 +306,7 @@ function cardAg(b) {
     </div>
     <div class="ag-lado">
       <span class="badge ${classe}">${rotulo}</span>
-      <span class="preco">${b.price ? BRL(b.price) : ''}</span>
+      <span class="preco">${b.payMethod === 'pix' ? 'Sinal R$ 10,00' : (b.price ? BRL(b.price) : '')}</span>
       ${btnPago}
     </div>
   </div>`;
