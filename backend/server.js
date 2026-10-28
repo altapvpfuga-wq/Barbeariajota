@@ -33,16 +33,28 @@ const app = express();
 const PORT = Number(process.env.PORT || 3001);
 
 // ---------- Firebase Admin (push notifications) ----------
-let firebaseOk = false;
+// Dois projetos Firebase: um para o cliente, outro para o painel
+let firebaseClienteOk = false;
+let firebasePainelOk = false;
+let firebaseClienteApp = null;
+let firebasePainelApp = null;
 try {
-  const serviceAccount = require(path.join(__dirname, 'firebase-service-account.json'));
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-  firebaseOk = true;
-  console.log('[firebase] inicializado com sucesso');
+  const saCliente = require(path.join(__dirname, 'firebase-service-account.json'));
+  firebaseClienteApp = admin.initializeApp({ credential: admin.cert(saCliente) }, 'cliente');
+  firebaseClienteOk = true;
+  console.log('[firebase] cliente inicializado com sucesso');
 } catch (e) {
-  console.warn('[firebase] nao inicializado:', e.message);
-  console.warn('[firebase] coloque o arquivo firebase-service-account.json na pasta backend/');
+  console.warn('[firebase] cliente nao inicializado:', e.message);
 }
+try {
+  const saPainel = require(path.join(__dirname, 'firebase-service-account-painel.json'));
+  firebasePainelApp = admin.initializeApp({ credential: admin.cert(saPainel) }, 'painel');
+  firebasePainelOk = true;
+  console.log('[firebase] painel inicializado com sucesso');
+} catch (e) {
+  console.warn('[firebase] painel nao inicializado:', e.message);
+}
+const firebaseOk = firebaseClienteOk || firebasePainelOk;
 
 // ---------- configuracoes (todas no .env) ----------
 const MODO = (process.env.MODO_PAGAMENTO || 'link_unico').trim();   // link_unico | link_fixo
@@ -509,24 +521,43 @@ async function enviarPush(titulo, corpo, dados) {
   if (!firebaseOk) return;
   const tokens = loadPushTokens();
   if (tokens.length === 0) return;
-  const tokenList = tokens.map((t) => t.token);
-  try {
-    const msg = {
-      notification: { title: titulo, body: corpo },
-      data: dados || {},
-      tokens: tokenList,
-    };
-    const resp = await admin.messaging().sendEachForMulticast(msg);
-    console.log(`[push] enviado: ${resp.successCount} ok, ${resp.failureCount} falhas`);
-    // remove tokens invalidos
-    const novos = [];
-    resp.responses.forEach((r, i) => {
-      if (r.success) novos.push(tokens[i]);
-      else if (r.error && r.error.code !== 'messaging/registration-token-not-registered') novos.push(tokens[i]);
-    });
-    savePushTokens(novos);
-  } catch (e) {
-    console.error('[push] erro:', e.message);
+  // separa tokens por app (cliente usa projeto barbearia-do-jota, painel usa barbearia1)
+  const tokensCliente = tokens.filter((t) => t.app === 'cliente');
+  const tokensPainel = tokens.filter((t) => t.app === 'painel');
+  const todosTokens = [...tokensCliente, ...tokensPainel];
+
+  async function enviarParaApp(firebaseApp, lista, nomeApp) {
+    if (!firebaseApp || lista.length === 0) return;
+    const messaging = firebaseApp.messaging();
+    const tokenList = lista.map((t) => t.token);
+    try {
+      const msg = {
+        notification: { title: titulo, body: corpo },
+        data: dados || {},
+        tokens: tokenList,
+      };
+      const resp = await messaging.sendEachForMulticast(msg);
+      console.log(`[push-${nomeApp}] enviado: ${resp.successCount} ok, ${resp.failureCount} falhas`);
+      // remove tokens invalidos
+      const novos = [];
+      resp.responses.forEach((r, i) => {
+        if (r.success) novos.push(lista[i]);
+        else if (r.error && r.error.code !== 'messaging/registration-token-not-registered') novos.push(lista[i]);
+      });
+      return novos;
+    } catch (e) {
+      console.error(`[push-${nomeApp}] erro:`, e.message);
+      return lista;
+    }
+  }
+
+  const novosCliente = await enviarParaApp(firebaseClienteApp, tokensCliente, 'cliente');
+  const novosPainel = await enviarParaApp(firebasePainelApp, tokensPainel, 'painel');
+
+  // salva apenas os tokens validos
+  const novosTodos = [...(novosCliente || []), ...(novosPainel || [])];
+  if (novosTodos.length !== tokens.length) {
+    savePushTokens(novosTodos);
   }
 }
 

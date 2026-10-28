@@ -43,3 +43,6 @@ Thumbs.db
 .DS_Store
 .vscode/
 .idea/
+
+# Firebase service account (secreto)
+backend/firebase-service-account*.json
