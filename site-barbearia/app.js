@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.48',
+  APP_VERSION: '1.0.49',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -744,9 +744,18 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     // se for forçado, ignora o "Depois" — sempre aparece
     if (!forcar && silencioso && adiado > Date.now() - 5 * 60 * 1000) return null;   // "Depois" lembra por 5 minutos
 
-    const asset = (rel.assets || []).find(
+    const r = repoSalvo();
+    let asset = (rel.assets || []).find(
       (a) => /\.apk$/i.test(a.name) && !/^painel/i.test(a.name)
     );
+    if (!asset && r) {
+      // release sem o APK anexado (ou lista incompleta): monta o endereco
+      // direto pelo padrao do nome do arquivo
+      asset = {
+        name: `Barbearia-do-Jota-v${nova}.apk`,
+        browser_download_url: `https://github.com/${r.user}/${r.repo}/releases/download/v${nova}/Barbearia-do-Jota-v${nova}.apk`,
+      };
+    }
     mostrarAtualizacao(nova, rel, asset, forcar);
     return nova;
   } catch (e) {
@@ -2023,11 +2032,31 @@ function ajustarTarjaDoTopo() {
 // ===== NOTIFICACOES PUSH (FCM) =====
 // Registra o token FCM no servidor para receber notificacoes mesmo com o app fechado
 const LS_PUSH_TOKEN = 'barbearia_push_token_v1';
+const LS_APARELHO = 'barbearia_aparelho_id_v1';
+
+// identifica ESTE aparelho. Se o token do FCM trocar (desinstalou, limpou
+// dados...), o servidor substitui o token antigo em vez de guardar os dois -
+// assim a mesma notificacao nao chega duas vezes.
+function idDoAparelho() {
+  try {
+    let id = localStorage.getItem(LS_APARELHO);
+    if (!id) {
+      id = 'ap-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+      localStorage.setItem(LS_APARELHO, id);
+    }
+    return id;
+  } catch { return ''; }
+}
 
 // manda o token para o servidor testando todos os enderecos (nuvem, local...)
 async function enviarTokenPush(valor, app) {
   if (!valor) return false;
-  const corpo = JSON.stringify({ token: valor, app: app || 'cliente', version: CONFIG.APP_VERSION });
+  const corpo = JSON.stringify({
+    token: valor,
+    app: app || 'cliente',
+    version: CONFIG.APP_VERSION,
+    aparelho: idDoAparelho(),
+  });
   const lista = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
   for (const base of lista) {
     try {
@@ -2085,10 +2114,16 @@ async function registrarPush() {
     });
     // quando o usuario toca na notificacao
     PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-      // se for notificacao de atualizacao, abre o popup
-      if (notification.notification.data && notification.notification.data.tipo === 'atualizacao') {
-        checarAtualizacao({ silencioso: false });
+      const dados = (notification.notification && notification.notification.data) || {};
+      if (dados.tipo !== 'atualizacao') return;
+      // o push ja traz o endereco DIRETO do APK: abre o popup com esse link,
+      // sem depender da API do GitHub (que as vezes bloqueia o celular)
+      const nova = String(dados.versao || '').replace(/^v/i, '');
+      if (dados.urlCliente && nova && versaoEhMaior(nova, CONFIG.APP_VERSION)) {
+        mostrarAtualizacao(nova, { body: '' }, { browser_download_url: dados.urlCliente }, false);
+        return;
       }
+      checarAtualizacao({ silencioso: false });
     });
 
     // pede permissao (Android 13+)

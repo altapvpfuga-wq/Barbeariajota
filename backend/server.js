@@ -434,7 +434,7 @@ app.post('/api/agendar', (req, res) => {
       'Novo agendamento!',
       detalhe || 'Chegou um novo agendamento no painel.',
       { tipo: 'agendamento', id: String(b.id) },
-      { alvos: { cliente: false, painel: true } }
+      { alvos: { cliente: false, painel: true }, tag: 'barbearia-agendamento' }
     ).catch((e) => console.warn('[push] falha ao avisar o painel:', e.message));
   }
   res.json({ ok: true });
@@ -643,15 +643,24 @@ async function inscreverNoTopico(token, nomeApp) {
 
 // recebe o token FCM do app
 app.post('/api/push-token', async (req, res) => {
-  const { token, app, version } = req.body || {};
+  const { token, app, version, aparelho } = req.body || {};
   if (!token) return res.status(400).json({ error: 'token obrigatorio' });
   const nomeApp = app === 'painel' ? 'painel' : 'cliente';
+  const idAparelho = aparelho ? String(aparelho).slice(0, 80) : '';
   const inscricao = await inscreverNoTopico(token, nomeApp);
-  const tokens = loadPushTokens().filter((t) => t.token !== token);
+  // o mesmo aparelho pode trocar de token (desinstalou, limpou dados...).
+  // Guardamos so o token mais novo dele: senao a MESMA notificacao chega
+  // duas vezes (uma por cada token antigo que continuou valido no Google).
+  const tokens = loadPushTokens().filter((t) => {
+    if (t.token === token) return false;
+    if (idAparelho && t.aparelho === idAparelho && t.app === nomeApp) return false;
+    return true;
+  });
   tokens.push({
     token,
     app: nomeApp,
     version: version || '0',
+    aparelho: idAparelho || null,
     topicoOk: !!inscricao.ok,
     topicoErro: inscricao.erro || (inscricao.erros && inscricao.erros[0]) || null,
     atualizadoEm: new Date().toISOString(),
@@ -668,6 +677,13 @@ async function enviarPush(titulo, corpo, dados, opcoes) {
     return { ok: false, motivo: 'firebase' };
   }
   const alvos = { cliente: true, painel: true, ...((opcoes && opcoes.alvos) || {}) };
+  // tag: notificacoes com a mesma tag se substituem na barra do Android
+  // (evita aparecer duas vezes a mesma atualizacao)
+  const tag = opcoes && opcoes.tag ? String(opcoes.tag) : null;
+  const androidNotif = Object.assign(
+    { defaultSound: true, defaultVibrateTimings: true },
+    tag ? { tag } : {}
+  );
   // o FCM so aceita texto nos dados
   const dadosTexto = {};
   for (const [chave, valor] of Object.entries(dados || {})) {
@@ -683,7 +699,7 @@ async function enviarPush(titulo, corpo, dados, opcoes) {
         topic: topicoDoApp(nomeApp),
         notification: { title: titulo, body: corpo },
         data: dadosTexto,
-        android: { priority: 'high', notification: { defaultSound: true, defaultVibrateTimings: true } },
+        android: { priority: 'high', notification: androidNotif },
       });
       console.log(`[push-${nomeApp}] enviado no topico ${topicoDoApp(nomeApp)} (${id})`);
       return true;
@@ -702,7 +718,7 @@ async function enviarPush(titulo, corpo, dados, opcoes) {
         notification: { title: titulo, body: corpo },
         data: dadosTexto,
         tokens: lista.map((t) => t.token),
-        android: { priority: 'high', notification: { defaultSound: true } },
+        android: { priority: 'high', notification: androidNotif },
       });
       console.log(`[push-${nomeApp}] tokens: ${resp.successCount} ok, ${resp.failureCount} falhas`);
       const validos = [];
@@ -773,7 +789,19 @@ async function enviarPush(titulo, corpo, dados, opcoes) {
 app.post('/api/push-atualizacao', (req, res) => {
   const { pin, versao } = req.body || {};
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
-  enviarPush('Atualização disponível!', `Nova versão ${versao || 'disponível'}. Toque para atualizar.`, { tipo: 'atualizacao', versao: versao || '' });
+  const v = String(versao || '').trim();
+  const pasta = v ? `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}` : '';
+  enviarPush(
+    'Atualização disponível!',
+    `Nova versão ${v || 'disponível'}. Toque para atualizar.`,
+    {
+      tipo: 'atualizacao',
+      versao: v,
+      urlCliente: pasta ? `${pasta}/Barbearia-do-Jota-v${v}.apk` : '',
+      urlPainel: pasta ? `${pasta}/Painel-v${v}.apk` : '',
+    },
+    { tag: 'barbearia-atualizacao' }
+  );
   res.json({ ok: true });
 });
 
@@ -1011,11 +1039,20 @@ async function checarAtualizacaoGitHub() {
 
     ultimaVersaoNotificada = versao;
     try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
-    // envia push notification para todos os apps inscritos
+    // envia push notification para todos os apps inscritos.
+    // Vai junto o endereco DIRETO de cada APK: assim o app abre o popup de
+    // atualizacao com o link certo, mesmo se a API do GitHub bloquear.
+    const pasta = `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${versao}`;
     const resultadoPush = await enviarPush(
       'Atualização disponível!',
       `Nova versão ${versao} do app disponível. Toque para atualizar.`,
-      { tipo: 'atualizacao', versao }
+      {
+        tipo: 'atualizacao',
+        versao,
+        urlCliente: `${pasta}/Barbearia-do-Jota-v${versao}.apk`,
+        urlPainel: `${pasta}/Painel-v${versao}.apk`,
+      },
+      { tag: 'barbearia-atualizacao' }
     );
     ultimaChecagem.enviado = !!resultadoPush.ok;
     ultimaChecagem.push = resultadoPush;

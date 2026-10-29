@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.48',
+  APP_VERSION: '1.0.49',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -228,14 +228,8 @@ function registrar(b, { avisaNovo = true } = {}) {
   salvarLocais(loc);
   if (novo && avisaNovo) {
     vibrar();
-    // notificacao do Android (aparece na barra, com som e vibração)
-    try {
-      const aviso = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Aviso;
-      if (aviso) aviso.notificar({
-        titulo: '💈 Novo agendamento!',
-        texto: `${b.clientName || 'Cliente'} — ${b.time || ''} · ${b.dateLabel || ''}`,
-      }).catch(() => {});
-    } catch { /* sem o plugin, fica o toast mesmo */ }
+    // NAO criamos notificacao local aqui: o servidor ja manda o push
+    // "Novo agendamento!" e o Android mostra na barra. Antes apareciam duas.
     toast(`📋 Novo agendamento!\n${b.clientName || ''} — ${b.time || ''} ${b.dateLabel || ''}`);
     pintarLista();
   }
@@ -790,19 +784,14 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     return null;
   }
 }
-// notificacao do Android quando aparece uma versao nova do Painel
+// Aviso de nova versao do Painel NAO cria notificacao local: o servidor
+// manda o push "Atualizacao disponivel!" e o Android mostra na barra.
+// (antes apareciam duas notificacoes iguais)
 function avisarAtualizacao(versao) {
   try {
     if (!versao) return;
-    if (localStorage.getItem(LS_NOTIF_UPDATE) === String(versao)) return;
-    const aviso = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Aviso;
-    if (!aviso) return;
-    aviso.notificar({
-      titulo: '💈 Atualização do Painel',
-      texto: `Versão ${versao} disponível. Toque para abrir e atualizar.`,
-    }).catch(() => {});
     localStorage.setItem(LS_NOTIF_UPDATE, String(versao));
-  } catch { /* sem o plugin, o popup do app continua aparecendo */ }
+  } catch { /* ignora */ }
 }
 function mostrarAtualizacao(versao, notasBrutas, asset, forcar) {
   // tira a tag [FORCAR] do texto que aparece para voce
@@ -810,7 +799,8 @@ function mostrarAtualizacao(versao, notasBrutas, asset, forcar) {
   $('updVersao').textContent = forcar ? `⚠️ Atualização importante: ${versao}` : `Nova versão: ${versao}`;
   $('updAtual').textContent = `Você está na versão ${CONFIG.APP_VERSION}`;
   $('updNotas').innerHTML = notas ? notas.replace(/</g, '&lt;').replace(/\n/g, '<br>') : 'Correções e melhorias nesta versão.';
-  const url = asset ? asset.browser_download_url : 'https://github.com/' + CONFIG.GITHUB_USER + '/' + CONFIG.GITHUB_REPO + '/releases';
+  const url = asset ? asset.browser_download_url
+    : `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/download/v${versao}/${CONFIG.ASSET_PREFIX}-v${versao}.apk`;
   $('btnAtualizar').textContent = '⬇️ Atualizar agora';
   $('btnAtualizar').disabled = false;
   $('btnAtualizar').onclick = () => {
@@ -972,11 +962,30 @@ if ($('tPresente')) $('tPresente').onclick = () => ligarNatal('presente', !statu
 // ============================================================
 // ===== NOTIFICACOES PUSH (FCM) =====
 const LS_PUSH_TOKEN = 'barbearia_painel_push_token_v1';
+const LS_APARELHO = 'barbearia_painel_aparelho_id_v1';
+
+// identifica ESTE aparelho: se o token do FCM trocar, o servidor substitui o
+// antigo em vez de guardar os dois (evita a mesma notificacao chegar 2 vezes)
+function idDoAparelho() {
+  try {
+    let id = localStorage.getItem(LS_APARELHO);
+    if (!id) {
+      id = 'pd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+      localStorage.setItem(LS_APARELHO, id);
+    }
+    return id;
+  } catch { return ''; }
+}
 
 // manda o token para o servidor testando todos os enderecos (nuvem, local...)
 async function enviarTokenPushPainel(valor) {
   if (!valor) return false;
-  const corpo = JSON.stringify({ token: valor, app: 'painel', version: CONFIG.APP_VERSION });
+  const corpo = JSON.stringify({
+    token: valor,
+    app: 'painel',
+    version: CONFIG.APP_VERSION,
+    aparelho: idDoAparelho(),
+  });
   const lista = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
   for (const base of lista) {
     try {
@@ -1030,9 +1039,15 @@ async function registrarPushPainel() {
       toast(notification.title || 'Nova notificacao');
     });
     PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-      if (notification.notification.data && notification.notification.data.tipo === 'atualizacao') {
-        checarAtualizacao({ silencioso: false });
+      const dados = (notification.notification && notification.notification.data) || {};
+      if (dados.tipo !== 'atualizacao') return;
+      // o push ja traz o endereco DIRETO do APK do Painel
+      const nova = String(dados.versao || '').replace(/^v/i, '');
+      if (dados.urlPainel && nova && versaoEhMaior(nova, CONFIG.APP_VERSION)) {
+        mostrarAtualizacao(nova, '', { browser_download_url: dados.urlPainel }, false);
+        return;
       }
+      checarAtualizacao({ silencioso: false });
     });
 
     const perm = await PushNotifications.requestPermissions();
