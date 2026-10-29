@@ -725,7 +725,9 @@ async function releasePeloAtom() {
   if (!entrada) throw new Error('atom vazio');
   const tag = (entrada.match(/<title>([^<]*)<\/title>/) || [])[1] || '';
   const quando = (entrada.match(/<updated>([^<]*)<\/updated>/) || [])[1] || '';
-  const versao = versaoLimpa(tag);
+  // no .atom o <title> e o NOME da release; a versao de verdade esta no link
+  const link = (entrada.match(/releases\/tag\/([^"]+)"/) || [])[1] || '';
+  const versao = versaoLimpa(link || (tag.match(/(\d+(?:\.\d+)*)\s*$/) || [])[1] || tag);
   if (!versao) throw new Error('atom sem tag');
   return { versao, publicadoEm: Date.parse(quando) || 0, origem: 'atom' };
 }
@@ -759,8 +761,8 @@ async function checarAtualizacaoGitHub() {
     const versao = rel.versao;
     // Primeira checagem depois de ligar/reiniciar: o arquivo com a ultima
     // versao avisada pode ter sido apagado pelo deploy do Render.
-    // Se a release saiu nas ultimas 2 horas, ela ainda precisa ser avisada.
-    const saiuAgora = rel.publicadoEm > 0 && (Date.now() - rel.publicadoEm) < 2 * 60 * 60 * 1000;
+    // Se a release saiu nos ultimos 10 minutos, ela ainda precisa ser avisada.
+    const saiuAgora = rel.publicadoEm > 0 && (Date.now() - rel.publicadoEm) < 10 * 60 * 1000;
     const primeiraVez = ultimaVersaoNotificada === null;
 
     ultimaChecagem = {
