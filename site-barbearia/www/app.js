@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.47',
+  APP_VERSION: '1.0.48',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -659,15 +659,40 @@ async function buscarUltimaVersao() {
   const r = repoSalvo();
   if (!r) return null;
   const url = `https://api.github.com/repos/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases/latest`;
-  const resp = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
-  if (resp.status === 404) {
-    throw new Error('repositório não encontrado ou privado (404)');
+  let erroApi = null;
+  try {
+    const resp = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+    if (resp.ok) return await resp.json();
+    if (resp.status === 404) throw new Error('repositório não encontrado ou privado (404)');
+    erroApi = new Error(`GitHub respondeu ${resp.status}`);
+  } catch (e) {
+    if (/404/.test(e.message)) throw e;
+    erroApi = e;
   }
-  if (resp.status === 403) {
-    throw new Error('limite de consultas do GitHub atingido (403)');
-  }
-  if (!resp.ok) throw new Error(`GitHub respondeu ${resp.status}`);
-  return await resp.json();
+
+  // Plano B: feed .atom do GitHub. Não tem limite de consultas e evita o
+  // erro 403 que acontece muito em internet de celular.
+  console.warn('[update] API falhou, usando o feed:', erroApi && erroApi.message);
+  const respFeed = await fetch(
+    `https://github.com/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases.atom`,
+    { headers: { Accept: 'application/atom+xml' } }
+  );
+  if (!respFeed.ok) throw new Error(`GitHub respondeu ${respFeed.status}`);
+  const xml = await respFeed.text();
+  const achado = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
+  if (!achado) throw new Error('nenhuma release publicada');
+  const tag = achado[1];
+  const versao = tag.replace(/^v/i, '');
+  const nomeApk = `Barbearia-do-Jota-v${versao}.apk`;
+  return {
+    tag_name: tag,
+    body: '',
+    html_url: `https://github.com/${r.user}/${r.repo}/releases/tag/${tag}`,
+    assets: [{
+      name: nomeApk,
+      browser_download_url: `https://github.com/${r.user}/${r.repo}/releases/download/${tag}/${nomeApk}`,
+    }],
+  };
 }
 
 // explica o que precisa fazer quando o GitHub nao responde
@@ -737,10 +762,10 @@ function mostrarAvisoUpdate(texto) {
   $('updAtual').textContent = `Versão ${CONFIG.APP_VERSION}`;
   $('updNotas').innerHTML = String(texto).replace(/</g, '&lt;').replace(/\n/g, '<br>');
   $('btnAtualizar').onclick = () => {
-    const r = repoSalvo();
-    if (r) window.open(`https://github.com/${r.user}/${r.repo}/releases`, '_blank', 'noopener');
+    $('modalUpdate').classList.add('hidden');
+    checarAtualizacao({ silencioso: false });
   };
-  $('btnAtualizar').textContent = '🔗 Abrir o GitHub';
+  $('btnAtualizar').textContent = '🔁 Tentar de novo';
   $('btnDepois').onclick = () => $('modalUpdate').classList.add('hidden');
   $('modalUpdate').classList.remove('hidden');
 }
@@ -806,17 +831,15 @@ function baixarEInstalar(url) {
     return;
   }
 
-  $('updNotas').textContent = 'Baixando a atualização. Ela será instalada em seguida...';
+  $('updNotas').textContent = 'Baixando a atualização dentro do app...';
   $('btnAtualizar').disabled = true;
   $('btnAtualizar').textContent = '⏳ Baixando...';
 
   nativo.instalar({ url })
     .then(() => {
-      $('btnAtualizar').textContent = '📥 Abrir pasta de downloads';
-      $('btnAtualizar').disabled = false;
-      $('btnAtualizar').onclick = () => nativo.abrirDownloads().catch(() => {});
-      $('updNotas').textContent =
-        'Download iniciado. Se a instalação não abrir sozinha, toque no arquivo na pasta Downloads.';
+      // o download continua no próprio aplicativo; quando terminar, o
+      // Android abre sozinho a tela de instalação (sem Chrome)
+      $('updNotas').textContent = 'Baixando a atualização dentro do app...';
     })
     .catch((e) => {
       $('btnAtualizar').disabled = false;
@@ -826,6 +849,31 @@ function baixarEInstalar(url) {
         + '. Tente de novo com a internet ligada.';
     });
 }
+
+// eventos do download nativo: progresso, fim, erro e permissão
+(function ligarEventosDoApkUpdate() {
+  const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
+  if (!nativo || !nativo.addListener) return;
+  const nota = () => $('updNotas');
+  const botao = () => $('btnAtualizar');
+  nativo.addListener('progresso', (d) => {
+    if (nota() && d && d.pct != null) {
+      nota().textContent = `Baixando a atualização dentro do app... ${d.pct}%`;
+    }
+  });
+  nativo.addListener('concluido', () => {
+    if (nota()) nota().textContent = 'Download concluído. Abrindo a instalação do Android...';
+  });
+  nativo.addListener('erro', (d) => {
+    if (nota()) nota().textContent = 'Não consegui baixar: ' + ((d && d.mensagem) || 'erro')
+      + '. Toque em Atualizar agora para tentar de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+  nativo.addListener('permissao', () => {
+    if (nota()) nota().textContent = 'Permita "Instalar apps desconhecidos" para o aplicativo e toque em Atualizar agora de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+})();
 
 // ============================================================
 //  AJUSTES — o barbeiro troca o endereco do servidor pelo proprio

@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.47',
+  APP_VERSION: '1.0.48',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -842,15 +842,14 @@ function baixarEInstalar(url) {
     a.remove();
     return;
   }
-  $('updNotas').textContent = 'Baixando a atualização. Ela será instalada em seguida...';
+  $('updNotas').textContent = 'Baixando a atualização dentro do app...';
   $('btnAtualizar').disabled = true;
   $('btnAtualizar').textContent = '⏳ Baixando...';
   nativo.instalar({ url })
     .then(() => {
-      $('btnAtualizar').textContent = '📥 Abrir pasta de downloads';
-      $('btnAtualizar').disabled = false;
-      $('btnAtualizar').onclick = () => nativo.abrirDownloads().catch(() => {});
-      $('updNotas').textContent = 'Download iniciado. Se a instalação não abrir sozinha, toque no arquivo na pasta Downloads.';
+      // o download continua no próprio aplicativo; quando terminar, o
+      // Android abre sozinho a tela de instalação (sem Chrome)
+      $('updNotas').textContent = 'Baixando a atualização dentro do app...';
     })
     .catch((e) => {
       $('btnAtualizar').disabled = false;
@@ -859,6 +858,31 @@ function baixarEInstalar(url) {
       $('updNotas').textContent = 'Não consegui baixar: ' + (e && e.message ? e.message : 'erro') + '. Tente de novo com a internet ligada.';
     });
 }
+
+// eventos do download nativo: progresso, fim, erro e permissão
+(function ligarEventosDoApkUpdate() {
+  const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
+  if (!nativo || !nativo.addListener) return;
+  const nota = () => $('updNotas');
+  const botao = () => $('btnAtualizar');
+  nativo.addListener('progresso', (d) => {
+    if (nota() && d && d.pct != null) {
+      nota().textContent = `Baixando a atualização dentro do app... ${d.pct}%`;
+    }
+  });
+  nativo.addListener('concluido', () => {
+    if (nota()) nota().textContent = 'Download concluído. Abrindo a instalação do Android...';
+  });
+  nativo.addListener('erro', (d) => {
+    if (nota()) nota().textContent = 'Não consegui baixar: ' + ((d && d.mensagem) || 'erro')
+      + '. Toque em Atualizar agora para tentar de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+  nativo.addListener('permissao', () => {
+    if (nota()) nota().textContent = 'Permita "Instalar apps desconhecidos" para o aplicativo e toque em Atualizar agora de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+})();
 $('btnVerificarUpdate').onclick = async () => {
   $('updStatus').textContent = 'Procurando...';
   $('modalCfg').classList.add('hidden');
