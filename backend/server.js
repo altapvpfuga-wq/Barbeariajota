@@ -251,6 +251,7 @@ app.get('/api/health', (req, res) => {
       painel: firebasePainelOk,
       tokens: loadPushTokens().length,
       ultimo: ultimoPush,
+      checagem: ultimaChecagem,
     },
   });
 });
@@ -540,6 +541,7 @@ app.post('/api/webhook/infinitypay', (req, res) => {
 // ============================================================
 const PUSH_TOKENS_FILE = path.join(__dirname, 'push-tokens.json');
 let ultimoPush = null; // fica visivel em /api/health para conferir o envio
+let ultimaChecagem = null; // ultima consulta ao GitHub (versao/erro)
 function loadPushTokens() {
   try {
     if (!fs.existsSync(PUSH_TOKENS_FILE)) return [];
@@ -691,6 +693,13 @@ app.post('/api/push-teste', (req, res) => {
   res.json({ ok: true, aviso: 'A notificação deve chegar em alguns segundos, mesmo com o app fechado.' });
 });
 
+// forca uma checagem agora (para testar sem esperar os 5 minutos)
+app.post('/api/push-checar', async (req, res) => {
+  if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
+  await checarAtualizacaoGitHub();
+  res.json({ ok: true, checagem: ultimaChecagem, ultimoPush });
+});
+
 // verifica GitHub a cada 5 minutos e envia push se houver nova versao
 const ULTIMA_VERSAO_FILE = path.join(__dirname, 'ultima-versao-notificada.json');
 let ultimaVersaoNotificada = null;
@@ -700,29 +709,80 @@ try {
   }
 } catch { /* ignora */ }
 
-async function checarAtualizacaoGitHub() {
-  if (!firebaseOk) return;
+function versaoLimpa(tag) {
+  return String(tag || '').trim().replace(/^v/i, '');
+}
+
+// O IP do Render e compartilhado: a API do GitHub pode responder 403
+// (limite de consultas). O feed .atom nao tem esse limite.
+async function releasePeloAtom() {
+  const r = await fetch('https://github.com/Surtadoo/barbearia-do-jota/releases.atom', {
+    headers: { 'User-Agent': 'barbearia-backend' },
+  });
+  if (!r.ok) throw new Error(`atom HTTP ${r.status}`);
+  const xml = await r.text();
+  const entrada = xml.split('<entry>')[1] || '';
+  if (!entrada) throw new Error('atom vazio');
+  const tag = (entrada.match(/<title>([^<]*)<\/title>/) || [])[1] || '';
+  const quando = (entrada.match(/<updated>([^<]*)<\/updated>/) || [])[1] || '';
+  const versao = versaoLimpa(tag);
+  if (!versao) throw new Error('atom sem tag');
+  return { versao, publicadoEm: Date.parse(quando) || 0, origem: 'atom' };
+}
+
+async function obterUltimaRelease() {
   try {
     const r = await fetch('https://api.github.com/repos/Surtadoo/barbearia-do-jota/releases/latest', {
-      headers: { 'User-Agent': 'barbearia-backend' },
+      headers: { 'User-Agent': 'barbearia-backend', Accept: 'application/vnd.github+json' },
     });
-    if (!r.ok) return;
-    const rel = await r.json();
-    const versao = String(rel.tag_name || '').replace(/^v/i, '');
-    if (!versao) return;
+    if (r.ok) {
+      const rel = await r.json();
+      const versao = versaoLimpa(rel.tag_name);
+      if (!versao) throw new Error('release sem tag');
+      return { versao, publicadoEm: Date.parse(rel.published_at || '') || 0, origem: 'api' };
+    }
+    const alt = await releasePeloAtom();
+    return { ...alt, origem: `atom (api respondeu ${r.status})` };
+  } catch (e) {
+    const alt = await releasePeloAtom();
+    return { ...alt, origem: `atom (api falhou: ${e.message})` };
+  }
+}
+
+async function checarAtualizacaoGitHub() {
+  if (!firebaseOk) {
+    ultimaChecagem = { em: new Date().toISOString(), erro: 'Firebase sem credenciais' };
+    return;
+  }
+  try {
+    const rel = await obterUltimaRelease();
+    const versao = rel.versao;
     // Primeira checagem depois de ligar/reiniciar: o arquivo com a ultima
     // versao avisada pode ter sido apagado pelo deploy do Render.
     // Se a release saiu nas ultimas 2 horas, ela ainda precisa ser avisada.
-    const publicadoEm = Date.parse(rel.published_at || '') || 0;
-    const saiuAgora = publicadoEm > 0 && (Date.now() - publicadoEm) < 2 * 60 * 60 * 1000;
+    const saiuAgora = rel.publicadoEm > 0 && (Date.now() - rel.publicadoEm) < 2 * 60 * 60 * 1000;
     const primeiraVez = ultimaVersaoNotificada === null;
 
-    if (!primeiraVez && versao === ultimaVersaoNotificada) return;
+    ultimaChecagem = {
+      em: new Date().toISOString(),
+      versao,
+      publicadoEm: rel.publicadoEm ? new Date(rel.publicadoEm).toISOString() : null,
+      origem: rel.origem,
+      primeiraVez,
+      enviado: false,
+      motivo: null,
+    };
+
+    if (!primeiraVez && versao === ultimaVersaoNotificada) {
+      ultimaChecagem.motivo = 'ja avisada';
+      return;
+    }
 
     if (primeiraVez && !saiuAgora) {
       // servidor reiniciou muito depois da release: so guarda, sem avisar
       ultimaVersaoNotificada = versao;
       try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
+      ultimaChecagem.motivo = 'release antiga, sem aviso';
       return;
     }
 
@@ -734,8 +794,11 @@ async function checarAtualizacaoGitHub() {
       `Nova versão ${versao} do app disponível. Toque para atualizar.`,
       { tipo: 'atualizacao', versao }
     );
+    ultimaChecagem.enviado = !!resultadoPush.ok;
+    ultimaChecagem.push = resultadoPush;
     console.log(`[push] notificacao de atualizacao v${versao} enviada`, resultadoPush);
   } catch (e) {
+    ultimaChecagem = { em: new Date().toISOString(), erro: e.message };
     console.warn('[push] erro ao checar GitHub:', e.message);
   }
 }
