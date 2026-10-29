@@ -257,6 +257,8 @@ app.get('/api/health', (req, res) => {
         app: t.app,
         versao: t.version,
         token: mascararToken(t.token),
+        topicoOk: t.topicoOk,
+        topicoErro: t.topicoErro,
         atualizadoEm: t.atualizadoEm,
       })),
       ultimo: ultimoPush,
@@ -423,6 +425,18 @@ app.post('/api/agendar', (req, res) => {
   };
   savePainel(p);
   console.log(`[painel] agendamento ${b.id} — ${b.clientName || '?'} · ${b.dateLabel || '?'} ${b.time || ''} (${b.payMethod || '?'})`);
+  // avisa o painel no celular quando chega um agendamento novo
+  if (!jaTinha) {
+    const detalhe = [b.clientName, b.serviceName, b.dateLabel, b.time]
+      .filter((x) => x != null && String(x).trim() !== '')
+      .join(' · ');
+    enviarPush(
+      'Novo agendamento!',
+      detalhe || 'Chegou um novo agendamento no painel.',
+      { tipo: 'agendamento', id: String(b.id) },
+      { alvos: { cliente: false, painel: true } }
+    ).catch((e) => console.warn('[push] falha ao avisar o painel:', e.message));
+  }
   res.json({ ok: true });
 });
 
@@ -586,35 +600,48 @@ function topicoDoApp(nomeApp) {
 // inscreve o aparelho no topico (pode chamar varias vezes, sem problema)
 async function inscreverNoTopico(token, nomeApp) {
   const messaging = messagingDoApp(nomeApp);
-  if (!messaging) return false;
+  if (!messaging) return { ok: false, erro: 'sem credenciais' };
   try {
-    await messaging.subscribeToTopic([token], topicoDoApp(nomeApp));
-    console.log(`[push] token do ${nomeApp} inscrito no topico ${topicoDoApp(nomeApp)}`);
-    return true;
+    const r = await messaging.subscribeToTopic([token], topicoDoApp(nomeApp));
+    const ok = !!(r && r.successCount > 0);
+    const erros = (r && r.errors ? r.errors : [])
+      .map((e) => (e.error && (e.error.code || e.error.message)) || 'erro')
+      .filter(Boolean);
+    console.log(`[push] topico ${topicoDoApp(nomeApp)} do ${nomeApp}: ${ok ? 'inscrito' : 'FALHOU'}`, erros);
+    return { ok, successCount: r && r.successCount, failureCount: r && r.failureCount, erros };
   } catch (e) {
     console.warn('[push] nao consegui inscrever no topico:', e.code || '', e.message);
-    return false;
+    return { ok: false, erro: e.code || e.message };
   }
 }
 
 // recebe o token FCM do app
-app.post('/api/push-token', (req, res) => {
+app.post('/api/push-token', async (req, res) => {
   const { token, app, version } = req.body || {};
   if (!token) return res.status(400).json({ error: 'token obrigatorio' });
   const nomeApp = app === 'painel' ? 'painel' : 'cliente';
+  const inscricao = await inscreverNoTopico(token, nomeApp);
   const tokens = loadPushTokens().filter((t) => t.token !== token);
-  tokens.push({ token, app: nomeApp, version: version || '0', atualizadoEm: new Date().toISOString() });
+  tokens.push({
+    token,
+    app: nomeApp,
+    version: version || '0',
+    topicoOk: !!inscricao.ok,
+    topicoErro: inscricao.erro || (inscricao.erros && inscricao.erros[0]) || null,
+    atualizadoEm: new Date().toISOString(),
+  });
   savePushTokens(tokens);
-  inscreverNoTopico(token, nomeApp); // sem await: responde rapido para o app
-  res.json({ ok: true, topico: topicoDoApp(nomeApp) });
+  res.json({ ok: true, topico: topicoDoApp(nomeApp), inscrito: !!inscricao.ok });
 });
 
 // envia push pelo topico (e, se o topico falhar, token por token)
-async function enviarPush(titulo, corpo, dados) {
+// opcoes.alvos = { cliente: true, painel: true }
+async function enviarPush(titulo, corpo, dados, opcoes) {
   if (!firebaseOk) {
     console.warn('[push] Firebase sem credenciais: nada enviado');
     return { ok: false, motivo: 'firebase' };
   }
+  const alvos = { cliente: true, painel: true, ...((opcoes && opcoes.alvos) || {}) };
   // o FCM so aceita texto nos dados
   const dadosTexto = {};
   for (const [chave, valor] of Object.entries(dados || {})) {
@@ -625,18 +652,12 @@ async function enviarPush(titulo, corpo, dados) {
     const messaging = messagingDoApp(nomeApp);
     if (!messaging) return false;
     try {
+      // sem channelId: usa o canal padrao do FCM, que sempre existe
       const id = await messaging.send({
         topic: topicoDoApp(nomeApp),
         notification: { title: titulo, body: corpo },
         data: dadosTexto,
-        android: {
-          priority: 'high',
-          notification: {
-            channelId: CANAL_ANDROID,
-            defaultSound: true,
-            defaultVibrateTimings: true,
-          },
-        },
+        android: { priority: 'high', notification: { defaultSound: true, defaultVibrateTimings: true } },
       });
       console.log(`[push-${nomeApp}] enviado no topico ${topicoDoApp(nomeApp)} (${id})`);
       return true;
@@ -655,10 +676,7 @@ async function enviarPush(titulo, corpo, dados) {
         notification: { title: titulo, body: corpo },
         data: dadosTexto,
         tokens: lista.map((t) => t.token),
-        android: {
-          priority: 'high',
-          notification: { channelId: CANAL_ANDROID, defaultSound: true },
-        },
+        android: { priority: 'high', notification: { defaultSound: true } },
       });
       console.log(`[push-${nomeApp}] tokens: ${resp.successCount} ok, ${resp.failureCount} falhas`);
       const validos = [];
@@ -676,8 +694,8 @@ async function enviarPush(titulo, corpo, dados) {
   }
 
   const tokens = loadPushTokens();
-  const tokensCliente = tokens.filter((t) => t.app === 'cliente');
-  const tokensPainel = tokens.filter((t) => t.app === 'painel');
+  const tokensCliente = alvos.cliente ? tokens.filter((t) => t.app === 'cliente') : [];
+  const tokensPainel = alvos.painel ? tokens.filter((t) => t.app === 'painel') : [];
 
   // 1) caminho principal: entrega DIRETO nos aparelhos que se registraram.
   //    (o envio por topico sempre "da certo" mesmo sem ninguem inscrito,
@@ -705,8 +723,8 @@ async function enviarPush(titulo, corpo, dados) {
   }
 
   // 2) sem aparelho registrado (deploy do Render apagou a lista): usa o topico
-  if (!okCliente) okCliente = await enviarNoTopico('cliente');
-  if (!okPainel) okPainel = await enviarNoTopico('painel');
+  if (alvos.cliente && !okCliente) okCliente = await enviarNoTopico('cliente');
+  if (alvos.painel && !okPainel) okPainel = await enviarNoTopico('painel');
 
   if (mortos.size > 0) {
     const restantes = tokens.filter((t) => !mortos.has(t.token));
@@ -714,9 +732,9 @@ async function enviarPush(titulo, corpo, dados) {
   }
 
   const resumo = {
-    ok: okCliente || okPainel,
-    cliente: okCliente,
-    painel: okPainel,
+    ok: (alvos.cliente && okCliente) || (alvos.painel && okPainel),
+    cliente: !!alvos.cliente && okCliente,
+    painel: !!alvos.painel && okPainel,
     tokens: tokens.length,
     direto: { cliente: tokensCliente.length, painel: tokensPainel.length },
     detalhes,
@@ -793,10 +811,50 @@ app.post('/api/push-diag', async (req, res) => {
   });
 });
 
+// forca a inscricao nos topicos e manda um push SO pelo topico (diagnostico)
+app.post('/api/push-topicos', async (req, res) => {
+  if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
+  const tokens = loadPushTokens();
+  const inscricoes = [];
+  for (const t of tokens) {
+    const r = await inscreverNoTopico(t.token, t.app);
+    t.topicoOk = !!r.ok;
+    t.topicoErro = r.erro || (r.erros && r.erros[0]) || null;
+    inscricoes.push({
+      app: t.app,
+      versao: t.version,
+      token: mascararToken(t.token),
+      ok: !!r.ok,
+      sucesso: r.successCount,
+      falhas: r.failureCount,
+      erros: r.erros || (r.erro ? [r.erro] : []),
+    });
+  }
+  savePushTokens(tokens);
+
+  const envios = [];
+  for (const nomeApp of ['cliente', 'painel']) {
+    const messaging = messagingDoApp(nomeApp);
+    if (!messaging) { envios.push({ app: nomeApp, ok: false, erro: 'sem credenciais' }); continue; }
+    try {
+      const id = await messaging.send({
+        topic: topicoDoApp(nomeApp),
+        notification: { title: 'Teste por tópico', body: 'Se isso chegou, o tópico está funcionando.' },
+        data: { tipo: 'teste' },
+        android: { priority: 'high' },
+      });
+      envios.push({ app: nomeApp, topico: topicoDoApp(nomeApp), ok: true, id });
+    } catch (e) {
+      envios.push({ app: nomeApp, ok: false, erro: e.code || e.message });
+    }
+  }
+
+  res.json({ inscricoes, envios });
+});
+
 // teste disparado pelo proprio app (botao em Ajustes). Sem PIN e limitado,
 // serve para o dono conferir a notificacao na hora.
-let ultimoAutoTeste = 0;
-app.post('/api/push-auto-teste', async (req, res) => {
+let ultimoAutoTeste = 0;app.post('/api/push-auto-teste', async (req, res) => {
   if (Date.now() - ultimoAutoTeste < 8000) {
     return res.status(429).json({ error: 'Aguarde alguns segundos e tente de novo.' });
   }
