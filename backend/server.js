@@ -45,6 +45,7 @@ let firebaseClienteApp = null;
 let firebasePainelApp = null;
 let messagingCliente = null;
 let messagingPainel = null;
+const projetosFirebase = { cliente: null, painel: null };
 
 // le as credenciais de: variavel de ambiente (JSON), pasta do backend ou /etc/secrets
 function lerServiceAccount(arquivo, variavelEnv) {
@@ -66,6 +67,7 @@ function iniciarFirebase(arquivo, variavelEnv, nome) {
     console.warn(`[firebase] ${nome} sem credenciais (${arquivo})`);
     return null;
   }
+  projetosFirebase[nome] = conta.project_id || null;
   try {
     const appFirebase = admin.initializeApp({ credential: admin.cert(conta) }, nome);
     console.log(`[firebase] ${nome} inicializado com sucesso`);
@@ -249,7 +251,14 @@ app.get('/api/health', (req, res) => {
       firebase: firebaseOk,
       cliente: firebaseClienteOk,
       painel: firebasePainelOk,
+      projetos: projetosFirebase,
       tokens: loadPushTokens().length,
+      aparelhos: loadPushTokens().map((t) => ({
+        app: t.app,
+        versao: t.version,
+        token: mascararToken(t.token),
+        atualizadoEm: t.atualizadoEm,
+      })),
       ultimo: ultimoPush,
       checagem: ultimaChecagem,
     },
@@ -553,6 +562,10 @@ function savePushTokens(tokens) {
   try { fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify(tokens, null, 2)); }
   catch (e) { console.error('[push] erro ao salvar tokens:', e.message); }
 }
+function mascararToken(token) {
+  const s = String(token || '');
+  return s.length <= 12 ? s : `${s.slice(0, 6)}...${s.slice(-6)}`;
+}
 
 // topicos do FCM: a inscricao fica gravada no Google, entao o push continua
 // chegando mesmo depois que o Render reinicia e apaga os arquivos do servidor.
@@ -632,7 +645,8 @@ async function enviarPush(titulo, corpo, dados) {
 
   async function enviarPorToken(nomeApp, lista) {
     const messaging = messagingDoApp(nomeApp);
-    if (!messaging || lista.length === 0) return [];
+    const detalhes = [];
+    if (!messaging || lista.length === 0) return { validos: [], detalhes };
     try {
       const resp = await messaging.sendEachForMulticast({
         notification: { title: titulo, body: corpo },
@@ -646,13 +660,15 @@ async function enviarPush(titulo, corpo, dados) {
       console.log(`[push-${nomeApp}] tokens: ${resp.successCount} ok, ${resp.failureCount} falhas`);
       const validos = [];
       resp.responses.forEach((r, i) => {
+        const codigo = r.error ? (r.error.code || r.error.message) : null;
+        detalhes.push({ app: nomeApp, token: mascararToken(lista[i].token), ok: !!r.success, erro: codigo });
         if (r.success) validos.push(lista[i]);
         else if (r.error && r.error.code !== 'messaging/registration-token-not-registered') validos.push(lista[i]);
       });
-      return validos;
+      return { validos, detalhes };
     } catch (e) {
       console.error(`[push-${nomeApp}] erro por token:`, e.message);
-      return lista;
+      return { validos: lista, detalhes: [{ app: nomeApp, erro: e.code || e.message }] };
     }
   }
 
@@ -660,19 +676,48 @@ async function enviarPush(titulo, corpo, dados) {
   const tokensCliente = tokens.filter((t) => t.app === 'cliente');
   const tokensPainel = tokens.filter((t) => t.app === 'painel');
 
-  const okCliente = await enviarNoTopico('cliente');
-  const okPainel = await enviarNoTopico('painel');
+  // 1) caminho principal: entrega DIRETO nos aparelhos que se registraram.
+  //    (o envio por topico sempre "da certo" mesmo sem ninguem inscrito,
+  //     entao ele nao serve de prova de entrega)
+  let okCliente = false;
+  let okPainel = false;
+  const detalhes = [];
+  const mortos = new Set();
 
-  // so usa a lista de tokens se o topico nao funcionou
-  const novosCliente = okCliente ? tokensCliente : await enviarPorToken('cliente', tokensCliente);
-  const novosPainel = okPainel ? tokensPainel : await enviarPorToken('painel', tokensPainel);
-
-  if (!okCliente || !okPainel) {
-    const validos = [...novosCliente, ...novosPainel];
-    if (validos.length !== tokens.length) savePushTokens(validos);
+  if (tokensCliente.length > 0) {
+    const r = await enviarPorToken('cliente', tokensCliente);
+    detalhes.push(...r.detalhes);
+    okCliente = r.validos.length > 0;
+    tokensCliente.forEach((t) => {
+      if (!r.validos.includes(t)) mortos.add(t.token);
+    });
+  }
+  if (tokensPainel.length > 0) {
+    const r = await enviarPorToken('painel', tokensPainel);
+    detalhes.push(...r.detalhes);
+    okPainel = r.validos.length > 0;
+    tokensPainel.forEach((t) => {
+      if (!r.validos.includes(t)) mortos.add(t.token);
+    });
   }
 
-  const resumo = { ok: okCliente || okPainel, cliente: okCliente, painel: okPainel, tokens: tokens.length };
+  // 2) sem aparelho registrado (deploy do Render apagou a lista): usa o topico
+  if (!okCliente) okCliente = await enviarNoTopico('cliente');
+  if (!okPainel) okPainel = await enviarNoTopico('painel');
+
+  if (mortos.size > 0) {
+    const restantes = tokens.filter((t) => !mortos.has(t.token));
+    if (restantes.length !== tokens.length) savePushTokens(restantes);
+  }
+
+  const resumo = {
+    ok: okCliente || okPainel,
+    cliente: okCliente,
+    painel: okPainel,
+    tokens: tokens.length,
+    direto: { cliente: tokensCliente.length, painel: tokensPainel.length },
+    detalhes,
+  };
   ultimoPush = { titulo, em: new Date().toISOString(), ...resumo };
   return resumo;
 }
@@ -686,11 +731,42 @@ app.post('/api/push-atualizacao', (req, res) => {
 });
 
 // teste manual do push (app precisa ter sido aberto ao menos uma vez)
-app.post('/api/push-teste', (req, res) => {
+app.post('/api/push-teste', async (req, res) => {
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
-  enviarPush('Teste de notificação', 'Se você recebeu isso com o app fechado, está funcionando!', { tipo: 'teste' })
-    .then((r) => console.log('[push] resultado do teste:', r));
-  res.json({ ok: true, aviso: 'A notificação deve chegar em alguns segundos, mesmo com o app fechado.' });
+  const r = await enviarPush('Teste de notificação', 'Se você recebeu isso com o app fechado, está funcionando!', { tipo: 'teste' });
+  res.json({ ok: r.ok, resultado: r, aviso: 'A notificação deve chegar em alguns segundos, mesmo com o app fechado.' });
+});
+
+// diagnostico: manda DIRETO para cada aparelho, SEM canal fixo.
+// Assim, se o problema for o canal de notificacao, aqui chega.
+app.post('/api/push-diag', async (req, res) => {
+  if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
+  const tokens = loadPushTokens();
+  const resultados = [];
+  for (const t of tokens) {
+    const messaging = messagingDoApp(t.app);
+    if (!messaging) {
+      resultados.push({ app: t.app, token: mascararToken(t.token), ok: false, erro: 'sem credenciais Firebase' });
+      continue;
+    }
+    try {
+      const id = await messaging.send({
+        token: t.token,
+        notification: { title: 'Teste direto', body: 'Se apareceu esta, a entrega funciona.' },
+        data: { tipo: 'teste' },
+        android: { priority: 'high' },
+      });
+      resultados.push({ app: t.app, versao: t.version, token: mascararToken(t.token), ok: true, id });
+    } catch (e) {
+      resultados.push({ app: t.app, versao: t.version, token: mascararToken(t.token), ok: false, erro: e.code || e.message });
+    }
+  }
+  res.json({
+    total: tokens.length,
+    projetos: projetosFirebase,
+    resultados,
+    dica: 'Se der ok=true e nao aparecer no celular, o Android esta bloqueando as notificacoes do app.',
+  });
 });
 
 // forca uma checagem agora (para testar sem esperar os 5 minutos)
