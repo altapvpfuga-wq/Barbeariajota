@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.46',
+  APP_VERSION: '1.0.47',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -332,8 +332,14 @@ function initCalendar() {
   viewY = d.getFullYear(); viewM = d.getMonth();
 }
 function renderCalendar() {
-  $('calTitle').textContent = `${MESES[viewM]} ${viewY}`;
   const today = new Date(); today.setHours(0, 0, 0, 0);
+  $('calTitle').textContent = `${MESES[viewM]} ${viewY}`;
+  // setas: não deixa voltar para mês passado nem passar de 12 meses
+  const mesAtual = new Date(today.getFullYear(), today.getMonth(), 1);
+  const primeiroDoMes = new Date(viewY, viewM, 1);
+  const limite = new Date(today.getFullYear(), today.getMonth() + 12, 1);
+  if ($('calPrev')) $('calPrev').disabled = primeiroDoMes <= mesAtual;
+  if ($('calNext')) $('calNext').disabled = primeiroDoMes >= limite;
   const first = new Date(viewY, viewM, 1);
   const lastDay = new Date(viewY, viewM + 1, 0).getDate();
   let html = '';
@@ -356,6 +362,28 @@ function renderCalendar() {
       renderTimes();
       renderResume();
     });
+}
+
+// troca o mês mostrado no calendário (setas ← →)
+function shiftMonth(delta) {
+  const alvo = new Date(viewY, viewM + delta, 1);
+  const hoje = new Date();
+  const mesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const limite = new Date(hoje.getFullYear(), hoje.getMonth() + 12, 1);
+  if (alvo < mesAtual || alvo > limite) return;
+  viewY = alvo.getFullYear();
+  viewM = alvo.getMonth();
+  // o dia marcado era de outro mês: limpa para não agendar na data errada
+  if (dayKey) {
+    const [ano, mes] = String(dayKey).split('-').map(Number);
+    if (ano !== viewY || mes !== viewM + 1) {
+      dayKey = null;
+      time = null;
+      renderTimes();
+      renderResume();
+    }
+  }
+  renderCalendar();
 }
 
 // ===== horários (etapa 3) =====
