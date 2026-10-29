@@ -786,23 +786,30 @@ async function enviarPush(titulo, corpo, dados, opcoes) {
 }
 
 // endpoint para enviar notificacao de atualizacao manualmente
-app.post('/api/push-atualizacao', (req, res) => {
+app.post('/api/push-atualizacao', async (req, res) => {
   const { pin, versao } = req.body || {};
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
   const v = String(versao || '').trim();
   const pasta = v ? `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}` : '';
-  enviarPush(
-    'Atualização disponível!',
-    `Nova versão ${v || 'disponível'}. Toque para atualizar.`,
-    {
-      tipo: 'atualizacao',
-      versao: v,
-      urlCliente: pasta ? `${pasta}/Barbearia-do-Jota-v${v}.apk` : '',
-      urlPainel: pasta ? `${pasta}/Painel-v${v}.apk` : '',
-    },
-    { tag: 'barbearia-atualizacao' }
+  const dados = {
+    tipo: 'atualizacao',
+    versao: v,
+    urlCliente: pasta ? `${pasta}/Barbearia-do-Jota-v${v}.apk` : '',
+    urlPainel: pasta ? `${pasta}/Painel-v${v}.apk` : '',
+  };
+  const rCliente = await enviarPush(
+    'Atualização do app do cliente!',
+    `Versão ${v || 'nova'} disponível. Toque para atualizar.`,
+    dados,
+    { alvos: { cliente: true, painel: false }, tag: 'barbearia-atualizacao-cliente' }
   );
-  res.json({ ok: true });
+  const rPainel = await enviarPush(
+    'Atualização do Painel!',
+    `Versão ${v || 'nova'} disponível. Toque para atualizar.`,
+    dados,
+    { alvos: { cliente: false, painel: true }, tag: 'barbearia-atualizacao-painel' }
+  );
+  res.json({ ok: rCliente.ok || rPainel.ok, cliente: rCliente, painel: rPainel });
 });
 
 // teste manual do push (app precisa ter sido aberto ao menos uma vez)
@@ -1042,18 +1049,35 @@ async function checarAtualizacaoGitHub() {
     // envia push notification para todos os apps inscritos.
     // Vai junto o endereco DIRETO de cada APK: assim o app abre o popup de
     // atualizacao com o link certo, mesmo se a API do GitHub bloquear.
+    // Cada app recebe a SUA notificacao, com titulo proprio: quem tem os dois
+    // instalados no mesmo celular entende que sao dois apps diferentes.
     const pasta = `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${versao}`;
-    const resultadoPush = await enviarPush(
-      'Atualização disponível!',
-      `Nova versão ${versao} do app disponível. Toque para atualizar.`,
-      {
-        tipo: 'atualizacao',
-        versao,
-        urlCliente: `${pasta}/Barbearia-do-Jota-v${versao}.apk`,
-        urlPainel: `${pasta}/Painel-v${versao}.apk`,
-      },
-      { tag: 'barbearia-atualizacao' }
+    const dados = {
+      tipo: 'atualizacao',
+      versao,
+      urlCliente: `${pasta}/Barbearia-do-Jota-v${versao}.apk`,
+      urlPainel: `${pasta}/Painel-v${versao}.apk`,
+    };
+    const pushCliente = await enviarPush(
+      'Atualização do app do cliente!',
+      `Versão ${versao} disponível. Toque para atualizar.`,
+      dados,
+      { alvos: { cliente: true, painel: false }, tag: 'barbearia-atualizacao-cliente' }
     );
+    const pushPainel = await enviarPush(
+      'Atualização do Painel!',
+      `Versão ${versao} disponível. Toque para atualizar.`,
+      dados,
+      { alvos: { cliente: false, painel: true }, tag: 'barbearia-atualizacao-painel' }
+    );
+    const resultadoPush = {
+      ok: pushCliente.ok || pushPainel.ok,
+      cliente: pushCliente.cliente,
+      painel: pushPainel.painel,
+      tokens: pushCliente.tokens,
+      direto: { cliente: pushCliente.direto.cliente, painel: pushPainel.direto.painel },
+      detalhes: [...(pushCliente.detalhes || []), ...(pushPainel.detalhes || [])],
+    };
     ultimaChecagem.enviado = !!resultadoPush.ok;
     ultimaChecagem.push = resultadoPush;
     console.log(`[push] notificacao de atualizacao v${versao} enviada`, resultadoPush);
