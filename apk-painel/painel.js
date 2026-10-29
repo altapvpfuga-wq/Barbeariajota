@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.44',
+  APP_VERSION: '1.0.45',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -716,12 +716,61 @@ function versaoEhMaior(nova, atual) {
   }
   return false;
 }
+// Busca as releases e devolve a mais nova que TEM o APK do Painel.
+// Antes eu olhava so a release "latest": quando ela tinha apenas o APK do
+// app do cliente, o botao abria a pagina do GitHub e o barbeiro baixava o
+// aplicativo errado. Agora release sem "Painel-vX.X.X.apk" e ignorada.
+async function releasesDoPainel() {
+  const resp = await fetch(
+    `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases?per_page=20`,
+    { headers: { Accept: 'application/vnd.github+json' } }
+  );
+  if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
+  const lista = await resp.json();
+  if (!Array.isArray(lista)) throw new Error('resposta estranha do GitHub');
+  const re = new RegExp('^' + CONFIG.ASSET_PREFIX + '.*\\.apk$', 'i');
+  return lista
+    .filter((r) => r && r.tag_name && !r.draft && !r.prerelease)
+    .map((r) => ({ rel: r, asset: (r.assets || []).find((a) => re.test(a.name)) }))
+    .filter((x) => x.asset);
+}
+// Devolve a release mais nova que tem o APK do Painel.
+// 1) tenta a API do GitHub (diz exatamente quais APKs existem);
+// 2) se a API bloquear (limite por IP), usa o feed .atom, que nao tem limite.
+async function releaseMaisNovaDoPainel() {
+  try {
+    const lista = await releasesDoPainel();
+    if (lista.length) return lista[0];
+  } catch (e) {
+    console.warn('[painel-update] api falhou, tentando o feed:', e.message);
+  }
+  const resp = await fetch(
+    `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases.atom`,
+    { headers: { Accept: 'application/atom+xml' } }
+  );
+  if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
+  const xml = await resp.text();
+  const m = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
+  if (!m) return null;
+  const tag = m[1];
+  const versao = tag.replace(/^v/i, '');
+  const nome = `${CONFIG.ASSET_PREFIX}-v${versao}.apk`;
+  return {
+    rel: { tag_name: tag, body: '' },
+    asset: {
+      name: nome,
+      browser_download_url: `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/download/${tag}/${nome}`,
+    },
+  };
+}
 async function checarAtualizacao({ silencioso = true } = {}) {
   try {
-    const resp = await fetch(`https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
-    if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
-    const rel = await resp.json();
-    if (!rel || !rel.tag_name) return null;
+    const achado = await releaseMaisNovaDoPainel();
+    if (!achado) {
+      if (!silencioso) $('updStatus').textContent = 'Ainda não há APK do Painel publicado.';
+      return null;
+    }
+    const { rel, asset } = achado;
     const nova = String(rel.tag_name).replace(/^v/i, '');
     const notas = String(rel.body || '');
     // forcar aparece mesmo com versao igual (rollback), MAS SO UMA VEZ por versao
@@ -731,7 +780,6 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     } else if (!versaoEhMaior(nova, CONFIG.APP_VERSION)) return null;
     const adiado = Number(localStorage.getItem(LS_ADIA) || 0);
     if (!forcar && silencioso && adiado > Date.now() - 5 * 60 * 1000) return null;
-    const asset = (rel.assets || []).find((a) => new RegExp('^' + CONFIG.ASSET_PREFIX + '.*\\.apk$', 'i').test(a.name));
     mostrarAtualizacao(nova, notas, asset, forcar);
     // avisa tambem na barra do Android (uma vez por versao, e so na checagem automatica)
     if (silencioso) avisarAtualizacao(nova);
