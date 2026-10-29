@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.41',
+  APP_VERSION: '1.0.42',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -899,21 +899,60 @@ if ($('tPresente')) $('tPresente').onclick = () => ligarNatal('presente', !statu
 //  INICIO
 // ============================================================
 // ===== NOTIFICACOES PUSH (FCM) =====
+const LS_PUSH_TOKEN = 'barbearia_painel_push_token_v1';
+
+// manda o token para o servidor testando todos os enderecos (nuvem, local...)
+async function enviarTokenPushPainel(valor) {
+  if (!valor) return false;
+  const corpo = JSON.stringify({ token: valor, app: 'painel', version: CONFIG.APP_VERSION });
+  const lista = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
+  for (const base of lista) {
+    try {
+      const r = await fetch(base + '/api/push-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: corpo,
+      });
+      if (r.ok) {
+        apiBaseAtual = base;
+        localStorage.setItem(LS_PUSH_TOKEN, valor);
+        console.log('[push] token do painel registrado no servidor:', base);
+        return true;
+      }
+    } catch (e) { /* tenta o proximo endereco */ }
+  }
+  console.warn('[push] nao consegui mandar o token do painel agora');
+  return false;
+}
+
 async function registrarPushPainel() {
   try {
     if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
     const PushNotifications = window.Capacitor.Plugins.PushNotifications;
-    const perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== 'granted') return;
-    await PushNotifications.register();
+
+    // canal de alta prioridade (Android 8+)
+    try {
+      await PushNotifications.createChannel({
+        id: 'barbearia_atualizacoes',
+        name: 'Avisos do painel',
+        description: 'Novos agendamentos e atualizações',
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+        lights: true,
+        lightColor: '#d4af37',
+      });
+    } catch (e) { /* Android antigo nao tem canal */ }
+
+    // ouvintes ANTES do register()
     PushNotifications.addListener('registration', async (token) => {
-      try {
-        await fetch(apiBaseAtual + '/api/push-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: token.value, app: 'painel', version: CONFIG.APP_VERSION }),
-        });
-      } catch { /* sem internet, tenta depois */ }
+      if (!token || !token.value) return;
+      localStorage.setItem(LS_PUSH_TOKEN, token.value);
+      const ok = await enviarTokenPushPainel(token.value);
+      if (!ok) setTimeout(() => enviarTokenPushPainel(token.value), 15000);
+    });
+    PushNotifications.addListener('registrationError', (erro) => {
+      console.warn('[push] erro no registro:', JSON.stringify(erro || {}));
     });
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
       toast(notification.title || 'Nova notificacao');
@@ -923,6 +962,16 @@ async function registrarPushPainel() {
         checarAtualizacao({ silencioso: false });
       }
     });
+
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive !== 'granted') {
+      console.warn('[push] permissao de notificacao negada pelo Android');
+      return;
+    }
+    await PushNotifications.register();
+
+    const salvo = localStorage.getItem(LS_PUSH_TOKEN);
+    if (salvo) enviarTokenPushPainel(salvo);
   } catch (e) {
     console.warn('[push] erro ao registrar:', e.message);
   }

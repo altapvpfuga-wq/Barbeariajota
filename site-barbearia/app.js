@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.41',
+  APP_VERSION: '1.0.42',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -815,6 +815,22 @@ function abrirAjustes() {
   $('updStatus').textContent = repoSalvo()
     ? `Versão mais recente: ${CONFIG.APP_VERSION}`
     : 'Atualizações automáticas desligadas.';
+  const statusPush = $('pushStatus');
+  if (statusPush) {
+    const PN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
+    if (!PN) {
+      statusPush.textContent = 'Notificações: disponíveis apenas no aplicativo Android.';
+    } else {
+      statusPush.textContent = 'Notificações: verificando...';
+      PN.checkPermissions().then((p) => {
+        statusPush.textContent = p.receive === 'granted'
+          ? 'Notificações: ativadas ✅'
+          : 'Notificações: BLOQUEADAS ⚠️ Ative em Configurações do Android > Apps > Barbearia do Jota > Notificações.';
+      }).catch(() => {
+        statusPush.textContent = 'Notificações: não foi possível verificar.';
+      });
+    }
+  }
   $('modalAjustes').classList.remove('hidden');
 }
 
@@ -1930,24 +1946,62 @@ function ajustarTarjaDoTopo() {
 
 // ===== NOTIFICACOES PUSH (FCM) =====
 // Registra o token FCM no servidor para receber notificacoes mesmo com o app fechado
+const LS_PUSH_TOKEN = 'barbearia_push_token_v1';
+
+// manda o token para o servidor testando todos os enderecos (nuvem, local...)
+async function enviarTokenPush(valor, app) {
+  if (!valor) return false;
+  const corpo = JSON.stringify({ token: valor, app: app || 'cliente', version: CONFIG.APP_VERSION });
+  const lista = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
+  for (const base of lista) {
+    try {
+      const r = await fetch(base + '/api/push-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: corpo,
+      });
+      if (r.ok) {
+        apiBaseAtual = base;
+        localStorage.setItem(LS_PUSH_TOKEN, valor);
+        console.log('[push] token registrado no servidor:', base);
+        return true;
+      }
+    } catch (e) { /* tenta o proximo endereco */ }
+  }
+  console.warn('[push] nao consegui mandar o token para o servidor agora');
+  return false;
+}
+
 async function registrarPush() {
   try {
     if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
     const PushNotifications = window.Capacitor.Plugins.PushNotifications;
-    // pede permissao
-    const perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== 'granted') return;
-    // registra no FCM
-    await PushNotifications.register();
-    // quando o token chegar, envia para o servidor
+
+    // canal de alta prioridade (Android 8+): sem ele a notificacao pode
+    // chegar "calada", sem aparecer na tela
+    try {
+      await PushNotifications.createChannel({
+        id: 'barbearia_atualizacoes',
+        name: 'Atualizações do app',
+        description: 'Avisos de novas versões e novidades',
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+        lights: true,
+        lightColor: '#d4af37',
+      });
+    } catch (e) { /* Android antigo nao tem canal */ }
+
+    // Os ouvintes TEM que vir ANTES do register(): senao o token chega
+    // antes de existir quem escute e o aparelho fica sem notificacao.
     PushNotifications.addListener('registration', async (token) => {
-      try {
-        await fetch(apiBaseAtual + '/api/push-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: token.value, app: 'cliente', version: CONFIG.APP_VERSION }),
-        });
-      } catch { /* sem internet, tenta depois */ }
+      if (!token || !token.value) return;
+      localStorage.setItem(LS_PUSH_TOKEN, token.value);
+      const ok = await enviarTokenPush(token.value, 'cliente');
+      if (!ok) setTimeout(() => enviarTokenPush(token.value, 'cliente'), 15000);
+    });
+    PushNotifications.addListener('registrationError', (erro) => {
+      console.warn('[push] erro no registro:', JSON.stringify(erro || {}));
     });
     // quando uma notificacao chegar com o app aberto
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
@@ -1960,6 +2014,19 @@ async function registrarPush() {
         checarAtualizacao({ silencioso: false });
       }
     });
+
+    // pede permissao (Android 13+)
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive !== 'granted') {
+      console.warn('[push] permissao de notificacao negada pelo Android');
+      return;
+    }
+    await PushNotifications.register();
+
+    // o servidor pode ter perdido a lista de tokens (deploy no Render):
+    // manda de novo o token que ja estava salvo no aparelho
+    const salvo = localStorage.getItem(LS_PUSH_TOKEN);
+    if (salvo) enviarTokenPush(salvo, 'cliente');
   } catch (e) {
     console.warn('[push] erro ao registrar:', e.message);
   }

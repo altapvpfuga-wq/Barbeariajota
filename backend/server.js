@@ -23,6 +23,11 @@ const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 
+// firebase-admin v14 usa a API modular: app.messaging() deixou de existir.
+// Sem isso, TODO envio de push falhava com "firebaseApp.messaging is not a function".
+let getMessaging = null;
+try { ({ getMessaging } = require('firebase-admin/messaging')); } catch { /* versao antiga */ }
+
 // le o .env de onde este arquivo esta, nao de onde o comando foi digitado
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -38,23 +43,59 @@ let firebaseClienteOk = false;
 let firebasePainelOk = false;
 let firebaseClienteApp = null;
 let firebasePainelApp = null;
-try {
-  const saCliente = require(path.join(__dirname, 'firebase-service-account.json'));
-  firebaseClienteApp = admin.initializeApp({ credential: admin.cert(saCliente) }, 'cliente');
-  firebaseClienteOk = true;
-  console.log('[firebase] cliente inicializado com sucesso');
-} catch (e) {
-  console.warn('[firebase] cliente nao inicializado:', e.message);
+let messagingCliente = null;
+let messagingPainel = null;
+
+// le as credenciais de: variavel de ambiente (JSON), pasta do backend ou /etc/secrets
+function lerServiceAccount(arquivo, variavelEnv) {
+  const bruto = String(process.env[variavelEnv] || '').trim();
+  if (bruto) {
+    try { return JSON.parse(bruto); }
+    catch (e) { console.warn(`[firebase] ${variavelEnv} invalido:`, e.message); }
+  }
+  const caminhos = [path.join(__dirname, arquivo), path.join('/etc/secrets', arquivo)];
+  for (const caminho of caminhos) {
+    try { return require(caminho); } catch { /* tenta o proximo */ }
+  }
+  return null;
 }
-try {
-  const saPainel = require(path.join(__dirname, 'firebase-service-account-painel.json'));
-  firebasePainelApp = admin.initializeApp({ credential: admin.cert(saPainel) }, 'painel');
-  firebasePainelOk = true;
-  console.log('[firebase] painel inicializado com sucesso');
-} catch (e) {
-  console.warn('[firebase] painel nao inicializado:', e.message);
+
+function iniciarFirebase(arquivo, variavelEnv, nome) {
+  const conta = lerServiceAccount(arquivo, variavelEnv);
+  if (!conta) {
+    console.warn(`[firebase] ${nome} sem credenciais (${arquivo})`);
+    return null;
+  }
+  try {
+    const appFirebase = admin.initializeApp({ credential: admin.cert(conta) }, nome);
+    console.log(`[firebase] ${nome} inicializado com sucesso`);
+    return appFirebase;
+  } catch (e) {
+    console.warn(`[firebase] ${nome} nao inicializado:`, e.message);
+    return null;
+  }
 }
-const firebaseOk = firebaseClienteOk || firebasePainelOk;
+
+firebaseClienteApp = iniciarFirebase('firebase-service-account.json', 'FIREBASE_SERVICE_ACCOUNT', 'cliente');
+firebasePainelApp = iniciarFirebase('firebase-service-account-painel.json', 'FIREBASE_SERVICE_ACCOUNT_PAINEL', 'painel');
+firebaseClienteOk = !!firebaseClienteApp;
+firebasePainelOk = !!firebasePainelApp;
+
+// cria o "messaging" do jeito certo em cada versao do firebase-admin
+function criarMessaging(appFirebase) {
+  if (!appFirebase) return null;
+  try {
+    if (getMessaging) return getMessaging(appFirebase);
+    return appFirebase.messaging();
+  } catch (e) {
+    console.warn('[firebase] messaging indisponivel:', e.message);
+    return null;
+  }
+}
+messagingCliente = criarMessaging(firebaseClienteApp);
+messagingPainel = criarMessaging(firebasePainelApp);
+
+const firebaseOk = !!messagingCliente || !!messagingPainel;
 
 // ---------- configuracoes (todas no .env) ----------
 const MODO = (process.env.MODO_PAGAMENTO || 'link_unico').trim();   // link_unico | link_fixo
@@ -204,6 +245,12 @@ app.get('/api/health', (req, res) => {
     sinal: SIGNAL_VALUE,
     linkFixo: MODO === 'link_fixo' ? LINK_FIXO : null,
     aguardando: Object.values(loadDB().pagamentos).filter((p) => !p.pago).length,
+    push: {
+      firebase: firebaseOk,
+      cliente: firebaseClienteOk,
+      painel: firebasePainelOk,
+      tokens: loadPushTokens().length,
+    },
   });
 });
 
@@ -503,62 +550,125 @@ function savePushTokens(tokens) {
   catch (e) { console.error('[push] erro ao salvar tokens:', e.message); }
 }
 
+// topicos do FCM: a inscricao fica gravada no Google, entao o push continua
+// chegando mesmo depois que o Render reinicia e apaga os arquivos do servidor.
+const TOPICO_CLIENTE = 'atualizacoes-cliente';
+const TOPICO_PAINEL = 'atualizacoes-painel';
+const CANAL_ANDROID = 'barbearia_atualizacoes';
+
+function messagingDoApp(nomeApp) {
+  return nomeApp === 'painel' ? messagingPainel : messagingCliente;
+}
+function topicoDoApp(nomeApp) {
+  return nomeApp === 'painel' ? TOPICO_PAINEL : TOPICO_CLIENTE;
+}
+
+// inscreve o aparelho no topico (pode chamar varias vezes, sem problema)
+async function inscreverNoTopico(token, nomeApp) {
+  const messaging = messagingDoApp(nomeApp);
+  if (!messaging) return false;
+  try {
+    await messaging.subscribeToTopic([token], topicoDoApp(nomeApp));
+    console.log(`[push] token do ${nomeApp} inscrito no topico ${topicoDoApp(nomeApp)}`);
+    return true;
+  } catch (e) {
+    console.warn('[push] nao consegui inscrever no topico:', e.code || '', e.message);
+    return false;
+  }
+}
+
 // recebe o token FCM do app
 app.post('/api/push-token', (req, res) => {
   const { token, app, version } = req.body || {};
   if (!token) return res.status(400).json({ error: 'token obrigatorio' });
-  const tokens = loadPushTokens();
-  const idx = tokens.findIndex((t) => t.token === token);
-  const entry = { token, app: app || 'desconhecido', version: version || '0', atualizadoEm: new Date().toISOString() };
-  if (idx >= 0) tokens[idx] = entry;
-  else tokens.push(entry);
+  const nomeApp = app === 'painel' ? 'painel' : 'cliente';
+  const tokens = loadPushTokens().filter((t) => t.token !== token);
+  tokens.push({ token, app: nomeApp, version: version || '0', atualizadoEm: new Date().toISOString() });
   savePushTokens(tokens);
-  res.json({ ok: true });
+  inscreverNoTopico(token, nomeApp); // sem await: responde rapido para o app
+  res.json({ ok: true, topico: topicoDoApp(nomeApp) });
 });
 
-// envia push notification para todos os tokens registrados
+// envia push pelo topico (e, se o topico falhar, token por token)
 async function enviarPush(titulo, corpo, dados) {
-  if (!firebaseOk) return;
-  const tokens = loadPushTokens();
-  if (tokens.length === 0) return;
-  // separa tokens por app (cliente usa projeto barbearia-do-jota, painel usa barbearia1)
-  const tokensCliente = tokens.filter((t) => t.app === 'cliente');
-  const tokensPainel = tokens.filter((t) => t.app === 'painel');
-  const todosTokens = [...tokensCliente, ...tokensPainel];
+  if (!firebaseOk) {
+    console.warn('[push] Firebase sem credenciais: nada enviado');
+    return { ok: false, motivo: 'firebase' };
+  }
+  // o FCM so aceita texto nos dados
+  const dadosTexto = {};
+  for (const [chave, valor] of Object.entries(dados || {})) {
+    dadosTexto[chave] = valor == null ? '' : String(valor);
+  }
 
-  async function enviarParaApp(firebaseApp, lista, nomeApp) {
-    if (!firebaseApp || lista.length === 0) return;
-    const messaging = firebaseApp.messaging();
-    const tokenList = lista.map((t) => t.token);
+  async function enviarNoTopico(nomeApp) {
+    const messaging = messagingDoApp(nomeApp);
+    if (!messaging) return false;
     try {
-      const msg = {
+      const id = await messaging.send({
+        topic: topicoDoApp(nomeApp),
         notification: { title: titulo, body: corpo },
-        data: dados || {},
-        tokens: tokenList,
-      };
-      const resp = await messaging.sendEachForMulticast(msg);
-      console.log(`[push-${nomeApp}] enviado: ${resp.successCount} ok, ${resp.failureCount} falhas`);
-      // remove tokens invalidos
-      const novos = [];
-      resp.responses.forEach((r, i) => {
-        if (r.success) novos.push(lista[i]);
-        else if (r.error && r.error.code !== 'messaging/registration-token-not-registered') novos.push(lista[i]);
+        data: dadosTexto,
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: CANAL_ANDROID,
+            defaultSound: true,
+            defaultVibrateTimings: true,
+          },
+        },
       });
-      return novos;
+      console.log(`[push-${nomeApp}] enviado no topico ${topicoDoApp(nomeApp)} (${id})`);
+      return true;
     } catch (e) {
-      console.error(`[push-${nomeApp}] erro:`, e.message);
+      console.warn(`[push-${nomeApp}] falha no topico:`, e.code || '', e.message);
+      return false;
+    }
+  }
+
+  async function enviarPorToken(nomeApp, lista) {
+    const messaging = messagingDoApp(nomeApp);
+    if (!messaging || lista.length === 0) return [];
+    try {
+      const resp = await messaging.sendEachForMulticast({
+        notification: { title: titulo, body: corpo },
+        data: dadosTexto,
+        tokens: lista.map((t) => t.token),
+        android: {
+          priority: 'high',
+          notification: { channelId: CANAL_ANDROID, defaultSound: true },
+        },
+      });
+      console.log(`[push-${nomeApp}] tokens: ${resp.successCount} ok, ${resp.failureCount} falhas`);
+      const validos = [];
+      resp.responses.forEach((r, i) => {
+        if (r.success) validos.push(lista[i]);
+        else if (r.error && r.error.code !== 'messaging/registration-token-not-registered') validos.push(lista[i]);
+      });
+      return validos;
+    } catch (e) {
+      console.error(`[push-${nomeApp}] erro por token:`, e.message);
       return lista;
     }
   }
 
-  const novosCliente = await enviarParaApp(firebaseClienteApp, tokensCliente, 'cliente');
-  const novosPainel = await enviarParaApp(firebasePainelApp, tokensPainel, 'painel');
+  const tokens = loadPushTokens();
+  const tokensCliente = tokens.filter((t) => t.app === 'cliente');
+  const tokensPainel = tokens.filter((t) => t.app === 'painel');
 
-  // salva apenas os tokens validos
-  const novosTodos = [...(novosCliente || []), ...(novosPainel || [])];
-  if (novosTodos.length !== tokens.length) {
-    savePushTokens(novosTodos);
+  const okCliente = await enviarNoTopico('cliente');
+  const okPainel = await enviarNoTopico('painel');
+
+  // so usa a lista de tokens se o topico nao funcionou
+  const novosCliente = okCliente ? tokensCliente : await enviarPorToken('cliente', tokensCliente);
+  const novosPainel = okPainel ? tokensPainel : await enviarPorToken('painel', tokensPainel);
+
+  if (!okCliente || !okPainel) {
+    const validos = [...novosCliente, ...novosPainel];
+    if (validos.length !== tokens.length) savePushTokens(validos);
   }
+
+  return { ok: okCliente || okPainel, cliente: okCliente, painel: okPainel, tokens: tokens.length };
 }
 
 // endpoint para enviar notificacao de atualizacao manualmente
@@ -567,6 +677,14 @@ app.post('/api/push-atualizacao', (req, res) => {
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
   enviarPush('Atualização disponível!', `Nova versão ${versao || 'disponível'}. Toque para atualizar.`, { tipo: 'atualizacao', versao: versao || '' });
   res.json({ ok: true });
+});
+
+// teste manual do push (app precisa ter sido aberto ao menos uma vez)
+app.post('/api/push-teste', (req, res) => {
+  if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
+  enviarPush('Teste de notificação', 'Se você recebeu isso com o app fechado, está funcionando!', { tipo: 'teste' })
+    .then((r) => console.log('[push] resultado do teste:', r));
+  res.json({ ok: true, aviso: 'A notificação deve chegar em alguns segundos, mesmo com o app fechado.' });
 });
 
 // verifica GitHub a cada 5 minutos e envia push se houver nova versao
@@ -588,23 +706,31 @@ async function checarAtualizacaoGitHub() {
     const rel = await r.json();
     const versao = String(rel.tag_name || '').replace(/^v/i, '');
     if (!versao) return;
-    // primeira vez: apenas registra, nao notifica
-    if (ultimaVersaoNotificada === null) {
+    // Primeira checagem depois de ligar/reiniciar: o arquivo com a ultima
+    // versao avisada pode ter sido apagado pelo deploy do Render.
+    // Se a release saiu nas ultimas 2 horas, ela ainda precisa ser avisada.
+    const publicadoEm = Date.parse(rel.published_at || '') || 0;
+    const saiuAgora = publicadoEm > 0 && (Date.now() - publicadoEm) < 2 * 60 * 60 * 1000;
+    const primeiraVez = ultimaVersaoNotificada === null;
+
+    if (!primeiraVez && versao === ultimaVersaoNotificada) return;
+
+    if (primeiraVez && !saiuAgora) {
+      // servidor reiniciou muito depois da release: so guarda, sem avisar
       ultimaVersaoNotificada = versao;
       try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
       return;
     }
-    if (versao !== ultimaVersaoNotificada) {
-      ultimaVersaoNotificada = versao;
-      try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
-      // envia push notification para todos os apps registrados
-      enviarPush(
-        'Atualização disponível!',
-        `Nova versão ${versao} do app disponível. Toque para atualizar.`,
-        { tipo: 'atualizacao', versao }
-      );
-      console.log(`[push] notificacao de atualizacao v${versao} enviada`);
-    }
+
+    ultimaVersaoNotificada = versao;
+    try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
+    // envia push notification para todos os apps inscritos
+    enviarPush(
+      'Atualização disponível!',
+      `Nova versão ${versao} do app disponível. Toque para atualizar.`,
+      { tipo: 'atualizacao', versao }
+    );
+    console.log(`[push] notificacao de atualizacao v${versao} enviada`);
   } catch (e) {
     console.warn('[push] erro ao checar GitHub:', e.message);
   }
@@ -619,5 +745,6 @@ app.listen(PORT, () => {
   console.log(`  InfinitePay: ${API_KEY && HANDLE ? `OK (${HANDLE})` : 'SEM CREDENCIAIS'}`);
   if (MODO === 'link_fixo') console.log(`  Link fixo: ${LINK_FIXO}`);
   console.log(`  Sinal: R$ ${SIGNAL_VALUE.toFixed(2)}`);
+  console.log(`  Push (FCM): ${firebaseOk ? 'OK' : 'SEM CREDENCIAIS'}  |  tokens salvos: ${loadPushTokens().length}`);
   console.log('');
 });

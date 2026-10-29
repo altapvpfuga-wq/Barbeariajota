@@ -28,6 +28,8 @@ APK/
 
 # dados do servidor (contem informacao de agendamentos)
 backend/pagamentos.json
+backend/push-tokens.json
+backend/ultima-versao-notificada.json
 backend/.env
 
 # token do GitHub (NAO pode ir para o repositorio)
