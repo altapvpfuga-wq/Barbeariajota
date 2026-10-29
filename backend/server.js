@@ -974,13 +974,9 @@ async function obterUltimaRelease() {
 //  Link curto para baixar o APK (facilita digitar no celular)
 // ============================================================
 async function versaoParaDownload() {
-  if (ultimaVersaoNotificada) return ultimaVersaoNotificada;
-  try {
-    const rel = await obterUltimaRelease();
-    return rel.versao;
-  } catch {
-    return '1.0.51';
-  }
+  // GitHub esta temporariamente indisponivel para publicar releases novas;
+  // usamos a ultima versao publicada que realmente existe no GitHub.
+  return '1.0.50';
 }
 
 app.get('/apk', async (req, res) => {
