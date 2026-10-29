@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.40',
+  APP_VERSION: '1.0.41',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -17,6 +17,7 @@ const CONFIG = {
   // No celular / APK: troque localhost pelo IP do PC na mesma rede (ex.: http://192.168.1.73:3001)
   // Se publicar o backend na internet, cole aqui o endereço https://... e apague os de baixo.
   API_BASES: [
+    'https://barbearia-jota-api-2026.onrender.com',
     'http://localhost:3001',
     'http://192.168.1.73:3001',
   ],

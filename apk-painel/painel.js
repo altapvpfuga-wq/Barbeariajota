@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.40',
+  APP_VERSION: '1.0.41',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -24,6 +24,7 @@ const CONFIG = {
 
   // Servidores no PC — OPCIONAIS (so Pix automatico e backup)
   API_BASES: [
+    'https://barbearia-jota-api-2026.onrender.com',
     'http://localhost:3001',
     'http://192.168.1.73:3001',
   ],

@@ -24,6 +24,7 @@ const CONFIG = {
 
   // Servidores no PC — OPCIONAIS (so Pix automatico e backup)
   API_BASES: [
+    'https://barbearia-jota-api-2026.onrender.com',
     'http://localhost:3001',
     'http://192.168.1.73:3001',
   ],
