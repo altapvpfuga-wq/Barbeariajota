@@ -46,7 +46,22 @@ public class ApkUpdatePlugin extends Plugin {
         }
         final String endereco = url.trim();
 
-        // ja baixou esse mesmo arquivo antes? entao so abre a instalacao
+        // 1) ANTES de baixar: o Android precisa autorizar ESTE app a instalar
+        //    APK. Se ainda nao autorizou, abre a tela de permissao e para por
+        //    aqui. O usuario autoriza, volta e toca em "Atualizar agora" de
+        //    novo: ai o download comeca.
+        if (!podeInstalar()) {
+            JSObject aviso = new JSObject();
+            aviso.put("precisaPermissao", true);
+            aviso.put("mensagem", "Permita 'Instalar apps desconhecidos' e toque em Atualizar de novo.");
+            abrirConfiguracoesDeInstalacao();
+            notificar("Permita 'Instalar apps desconhecidos' e toque em Atualizar de novo.");
+            emitir("permissao", aviso);
+            call.resolve(aviso);
+            return;
+        }
+
+        // 2) ja baixou esse mesmo arquivo antes? entao so abre a instalacao
         if (jaBaixado(endereco)) {
             try {
                 abrirInstalador(arquivoApk());
@@ -57,6 +72,7 @@ public class ApkUpdatePlugin extends Plugin {
             return;
         }
 
+        // 3) com a permissao dada: baixa dentro do app e abre o instalador
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -74,6 +90,16 @@ public class ApkUpdatePlugin extends Plugin {
         }).start();
 
         call.resolve();
+    }
+
+    // o Android so deixa instalar APK se o usuario autorizou este app
+    private boolean podeInstalar() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true;
+        try {
+            return getContext().getPackageManager().canRequestPackageInstalls();
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     // Mantido para o JS antigo nao quebrar: agora abre a tela onde o Android

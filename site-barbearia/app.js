@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.49',
+  APP_VERSION: '1.0.50',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -845,7 +845,15 @@ function baixarEInstalar(url) {
   $('btnAtualizar').textContent = '⏳ Baixando...';
 
   nativo.instalar({ url })
-    .then(() => {
+    .then((r) => {
+      if (r && r.precisaPermissao) {
+        // o Android abriu a tela de permissao: depois de permitir, o usuario
+        // toca em "Atualizar agora" de novo e o download comeca
+        $('updNotas').textContent = 'Permita "Instalar apps desconhecidos" na tela que abriu e toque em ⬇️ Atualizar agora de novo.';
+        $('btnAtualizar').disabled = false;
+        $('btnAtualizar').textContent = '⬇️ Atualizar agora';
+        return;
+      }
       // o download continua no próprio aplicativo; quando terminar, o
       // Android abre sozinho a tela de instalação (sem Chrome)
       $('updNotas').textContent = 'Baixando a atualização dentro do app...';
