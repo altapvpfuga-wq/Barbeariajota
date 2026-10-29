@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.40',
+  APP_VERSION: '1.0.48',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -24,6 +24,7 @@ const CONFIG = {
 
   // Servidores no PC — OPCIONAIS (so Pix automatico e backup)
   API_BASES: [
+    'https://barbearia-jota-api-2026.onrender.com',
     'http://localhost:3001',
     'http://192.168.1.73:3001',
   ],
@@ -715,12 +716,61 @@ function versaoEhMaior(nova, atual) {
   }
   return false;
 }
+// Busca as releases e devolve a mais nova que TEM o APK do Painel.
+// Antes eu olhava so a release "latest": quando ela tinha apenas o APK do
+// app do cliente, o botao abria a pagina do GitHub e o barbeiro baixava o
+// aplicativo errado. Agora release sem "Painel-vX.X.X.apk" e ignorada.
+async function releasesDoPainel() {
+  const resp = await fetch(
+    `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases?per_page=20`,
+    { headers: { Accept: 'application/vnd.github+json' } }
+  );
+  if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
+  const lista = await resp.json();
+  if (!Array.isArray(lista)) throw new Error('resposta estranha do GitHub');
+  const re = new RegExp('^' + CONFIG.ASSET_PREFIX + '.*\\.apk$', 'i');
+  return lista
+    .filter((r) => r && r.tag_name && !r.draft && !r.prerelease)
+    .map((r) => ({ rel: r, asset: (r.assets || []).find((a) => re.test(a.name)) }))
+    .filter((x) => x.asset);
+}
+// Devolve a release mais nova que tem o APK do Painel.
+// 1) tenta a API do GitHub (diz exatamente quais APKs existem);
+// 2) se a API bloquear (limite por IP), usa o feed .atom, que nao tem limite.
+async function releaseMaisNovaDoPainel() {
+  try {
+    const lista = await releasesDoPainel();
+    if (lista.length) return lista[0];
+  } catch (e) {
+    console.warn('[painel-update] api falhou, tentando o feed:', e.message);
+  }
+  const resp = await fetch(
+    `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases.atom`,
+    { headers: { Accept: 'application/atom+xml' } }
+  );
+  if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
+  const xml = await resp.text();
+  const m = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
+  if (!m) return null;
+  const tag = m[1];
+  const versao = tag.replace(/^v/i, '');
+  const nome = `${CONFIG.ASSET_PREFIX}-v${versao}.apk`;
+  return {
+    rel: { tag_name: tag, body: '' },
+    asset: {
+      name: nome,
+      browser_download_url: `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/download/${tag}/${nome}`,
+    },
+  };
+}
 async function checarAtualizacao({ silencioso = true } = {}) {
   try {
-    const resp = await fetch(`https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
-    if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
-    const rel = await resp.json();
-    if (!rel || !rel.tag_name) return null;
+    const achado = await releaseMaisNovaDoPainel();
+    if (!achado) {
+      if (!silencioso) $('updStatus').textContent = 'Ainda não há APK do Painel publicado.';
+      return null;
+    }
+    const { rel, asset } = achado;
     const nova = String(rel.tag_name).replace(/^v/i, '');
     const notas = String(rel.body || '');
     // forcar aparece mesmo com versao igual (rollback), MAS SO UMA VEZ por versao
@@ -730,7 +780,6 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     } else if (!versaoEhMaior(nova, CONFIG.APP_VERSION)) return null;
     const adiado = Number(localStorage.getItem(LS_ADIA) || 0);
     if (!forcar && silencioso && adiado > Date.now() - 5 * 60 * 1000) return null;
-    const asset = (rel.assets || []).find((a) => new RegExp('^' + CONFIG.ASSET_PREFIX + '.*\\.apk$', 'i').test(a.name));
     mostrarAtualizacao(nova, notas, asset, forcar);
     // avisa tambem na barra do Android (uma vez por versao, e so na checagem automatica)
     if (silencioso) avisarAtualizacao(nova);
@@ -793,15 +842,14 @@ function baixarEInstalar(url) {
     a.remove();
     return;
   }
-  $('updNotas').textContent = 'Baixando a atualização. Ela será instalada em seguida...';
+  $('updNotas').textContent = 'Baixando a atualização dentro do app...';
   $('btnAtualizar').disabled = true;
   $('btnAtualizar').textContent = '⏳ Baixando...';
   nativo.instalar({ url })
     .then(() => {
-      $('btnAtualizar').textContent = '📥 Abrir pasta de downloads';
-      $('btnAtualizar').disabled = false;
-      $('btnAtualizar').onclick = () => nativo.abrirDownloads().catch(() => {});
-      $('updNotas').textContent = 'Download iniciado. Se a instalação não abrir sozinha, toque no arquivo na pasta Downloads.';
+      // o download continua no próprio aplicativo; quando terminar, o
+      // Android abre sozinho a tela de instalação (sem Chrome)
+      $('updNotas').textContent = 'Baixando a atualização dentro do app...';
     })
     .catch((e) => {
       $('btnAtualizar').disabled = false;
@@ -810,6 +858,31 @@ function baixarEInstalar(url) {
       $('updNotas').textContent = 'Não consegui baixar: ' + (e && e.message ? e.message : 'erro') + '. Tente de novo com a internet ligada.';
     });
 }
+
+// eventos do download nativo: progresso, fim, erro e permissão
+(function ligarEventosDoApkUpdate() {
+  const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
+  if (!nativo || !nativo.addListener) return;
+  const nota = () => $('updNotas');
+  const botao = () => $('btnAtualizar');
+  nativo.addListener('progresso', (d) => {
+    if (nota() && d && d.pct != null) {
+      nota().textContent = `Baixando a atualização dentro do app... ${d.pct}%`;
+    }
+  });
+  nativo.addListener('concluido', () => {
+    if (nota()) nota().textContent = 'Download concluído. Abrindo a instalação do Android...';
+  });
+  nativo.addListener('erro', (d) => {
+    if (nota()) nota().textContent = 'Não consegui baixar: ' + ((d && d.mensagem) || 'erro')
+      + '. Toque em Atualizar agora para tentar de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+  nativo.addListener('permissao', () => {
+    if (nota()) nota().textContent = 'Permita "Instalar apps desconhecidos" para o aplicativo e toque em Atualizar agora de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+})();
 $('btnVerificarUpdate').onclick = async () => {
   $('updStatus').textContent = 'Procurando...';
   $('modalCfg').classList.add('hidden');
@@ -898,21 +971,60 @@ if ($('tPresente')) $('tPresente').onclick = () => ligarNatal('presente', !statu
 //  INICIO
 // ============================================================
 // ===== NOTIFICACOES PUSH (FCM) =====
+const LS_PUSH_TOKEN = 'barbearia_painel_push_token_v1';
+
+// manda o token para o servidor testando todos os enderecos (nuvem, local...)
+async function enviarTokenPushPainel(valor) {
+  if (!valor) return false;
+  const corpo = JSON.stringify({ token: valor, app: 'painel', version: CONFIG.APP_VERSION });
+  const lista = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
+  for (const base of lista) {
+    try {
+      const r = await fetch(base + '/api/push-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: corpo,
+      });
+      if (r.ok) {
+        apiBaseAtual = base;
+        localStorage.setItem(LS_PUSH_TOKEN, valor);
+        console.log('[push] token do painel registrado no servidor:', base);
+        return true;
+      }
+    } catch (e) { /* tenta o proximo endereco */ }
+  }
+  console.warn('[push] nao consegui mandar o token do painel agora');
+  return false;
+}
+
 async function registrarPushPainel() {
   try {
     if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
     const PushNotifications = window.Capacitor.Plugins.PushNotifications;
-    const perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== 'granted') return;
-    await PushNotifications.register();
+
+    // canal de alta prioridade (Android 8+)
+    try {
+      await PushNotifications.createChannel({
+        id: 'barbearia_atualizacoes',
+        name: 'Avisos do painel',
+        description: 'Novos agendamentos e atualizações',
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+        lights: true,
+        lightColor: '#d4af37',
+      });
+    } catch (e) { /* Android antigo nao tem canal */ }
+
+    // ouvintes ANTES do register()
     PushNotifications.addListener('registration', async (token) => {
-      try {
-        await fetch(apiBaseAtual + '/api/push-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: token.value, app: 'painel', version: CONFIG.APP_VERSION }),
-        });
-      } catch { /* sem internet, tenta depois */ }
+      if (!token || !token.value) return;
+      localStorage.setItem(LS_PUSH_TOKEN, token.value);
+      const ok = await enviarTokenPushPainel(token.value);
+      if (!ok) setTimeout(() => enviarTokenPushPainel(token.value), 15000);
+    });
+    PushNotifications.addListener('registrationError', (erro) => {
+      console.warn('[push] erro no registro:', JSON.stringify(erro || {}));
     });
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
       toast(notification.title || 'Nova notificacao');
@@ -922,6 +1034,16 @@ async function registrarPushPainel() {
         checarAtualizacao({ silencioso: false });
       }
     });
+
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive !== 'granted') {
+      console.warn('[push] permissao de notificacao negada pelo Android');
+      return;
+    }
+    await PushNotifications.register();
+
+    const salvo = localStorage.getItem(LS_PUSH_TOKEN);
+    if (salvo) enviarTokenPushPainel(salvo);
   } catch (e) {
     console.warn('[push] erro ao registrar:', e.message);
   }

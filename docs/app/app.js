@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.40',
+  APP_VERSION: '1.0.48',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -17,6 +17,7 @@ const CONFIG = {
   // No celular / APK: troque localhost pelo IP do PC na mesma rede (ex.: http://192.168.1.73:3001)
   // Se publicar o backend na internet, cole aqui o endereço https://... e apague os de baixo.
   API_BASES: [
+    'https://barbearia-jota-api-2026.onrender.com',
     'http://localhost:3001',
     'http://192.168.1.73:3001',
   ],
@@ -331,8 +332,14 @@ function initCalendar() {
   viewY = d.getFullYear(); viewM = d.getMonth();
 }
 function renderCalendar() {
-  $('calTitle').textContent = `${MESES[viewM]} ${viewY}`;
   const today = new Date(); today.setHours(0, 0, 0, 0);
+  $('calTitle').textContent = `${MESES[viewM]} ${viewY}`;
+  // setas: não deixa voltar para mês passado nem passar de 12 meses
+  const mesAtual = new Date(today.getFullYear(), today.getMonth(), 1);
+  const primeiroDoMes = new Date(viewY, viewM, 1);
+  const limite = new Date(today.getFullYear(), today.getMonth() + 12, 1);
+  if ($('calPrev')) $('calPrev').disabled = primeiroDoMes <= mesAtual;
+  if ($('calNext')) $('calNext').disabled = primeiroDoMes >= limite;
   const first = new Date(viewY, viewM, 1);
   const lastDay = new Date(viewY, viewM + 1, 0).getDate();
   let html = '';
@@ -355,6 +362,28 @@ function renderCalendar() {
       renderTimes();
       renderResume();
     });
+}
+
+// troca o mês mostrado no calendário (setas ← →)
+function shiftMonth(delta) {
+  const alvo = new Date(viewY, viewM + delta, 1);
+  const hoje = new Date();
+  const mesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const limite = new Date(hoje.getFullYear(), hoje.getMonth() + 12, 1);
+  if (alvo < mesAtual || alvo > limite) return;
+  viewY = alvo.getFullYear();
+  viewM = alvo.getMonth();
+  // o dia marcado era de outro mês: limpa para não agendar na data errada
+  if (dayKey) {
+    const [ano, mes] = String(dayKey).split('-').map(Number);
+    if (ano !== viewY || mes !== viewM + 1) {
+      dayKey = null;
+      time = null;
+      renderTimes();
+      renderResume();
+    }
+  }
+  renderCalendar();
 }
 
 // ===== horários (etapa 3) =====
@@ -630,15 +659,40 @@ async function buscarUltimaVersao() {
   const r = repoSalvo();
   if (!r) return null;
   const url = `https://api.github.com/repos/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases/latest`;
-  const resp = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
-  if (resp.status === 404) {
-    throw new Error('repositório não encontrado ou privado (404)');
+  let erroApi = null;
+  try {
+    const resp = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+    if (resp.ok) return await resp.json();
+    if (resp.status === 404) throw new Error('repositório não encontrado ou privado (404)');
+    erroApi = new Error(`GitHub respondeu ${resp.status}`);
+  } catch (e) {
+    if (/404/.test(e.message)) throw e;
+    erroApi = e;
   }
-  if (resp.status === 403) {
-    throw new Error('limite de consultas do GitHub atingido (403)');
-  }
-  if (!resp.ok) throw new Error(`GitHub respondeu ${resp.status}`);
-  return await resp.json();
+
+  // Plano B: feed .atom do GitHub. Não tem limite de consultas e evita o
+  // erro 403 que acontece muito em internet de celular.
+  console.warn('[update] API falhou, usando o feed:', erroApi && erroApi.message);
+  const respFeed = await fetch(
+    `https://github.com/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases.atom`,
+    { headers: { Accept: 'application/atom+xml' } }
+  );
+  if (!respFeed.ok) throw new Error(`GitHub respondeu ${respFeed.status}`);
+  const xml = await respFeed.text();
+  const achado = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
+  if (!achado) throw new Error('nenhuma release publicada');
+  const tag = achado[1];
+  const versao = tag.replace(/^v/i, '');
+  const nomeApk = `Barbearia-do-Jota-v${versao}.apk`;
+  return {
+    tag_name: tag,
+    body: '',
+    html_url: `https://github.com/${r.user}/${r.repo}/releases/tag/${tag}`,
+    assets: [{
+      name: nomeApk,
+      browser_download_url: `https://github.com/${r.user}/${r.repo}/releases/download/${tag}/${nomeApk}`,
+    }],
+  };
 }
 
 // explica o que precisa fazer quando o GitHub nao responde
@@ -708,10 +762,10 @@ function mostrarAvisoUpdate(texto) {
   $('updAtual').textContent = `Versão ${CONFIG.APP_VERSION}`;
   $('updNotas').innerHTML = String(texto).replace(/</g, '&lt;').replace(/\n/g, '<br>');
   $('btnAtualizar').onclick = () => {
-    const r = repoSalvo();
-    if (r) window.open(`https://github.com/${r.user}/${r.repo}/releases`, '_blank', 'noopener');
+    $('modalUpdate').classList.add('hidden');
+    checarAtualizacao({ silencioso: false });
   };
-  $('btnAtualizar').textContent = '🔗 Abrir o GitHub';
+  $('btnAtualizar').textContent = '🔁 Tentar de novo';
   $('btnDepois').onclick = () => $('modalUpdate').classList.add('hidden');
   $('modalUpdate').classList.remove('hidden');
 }
@@ -777,17 +831,15 @@ function baixarEInstalar(url) {
     return;
   }
 
-  $('updNotas').textContent = 'Baixando a atualização. Ela será instalada em seguida...';
+  $('updNotas').textContent = 'Baixando a atualização dentro do app...';
   $('btnAtualizar').disabled = true;
   $('btnAtualizar').textContent = '⏳ Baixando...';
 
   nativo.instalar({ url })
     .then(() => {
-      $('btnAtualizar').textContent = '📥 Abrir pasta de downloads';
-      $('btnAtualizar').disabled = false;
-      $('btnAtualizar').onclick = () => nativo.abrirDownloads().catch(() => {});
-      $('updNotas').textContent =
-        'Download iniciado. Se a instalação não abrir sozinha, toque no arquivo na pasta Downloads.';
+      // o download continua no próprio aplicativo; quando terminar, o
+      // Android abre sozinho a tela de instalação (sem Chrome)
+      $('updNotas').textContent = 'Baixando a atualização dentro do app...';
     })
     .catch((e) => {
       $('btnAtualizar').disabled = false;
@@ -797,6 +849,31 @@ function baixarEInstalar(url) {
         + '. Tente de novo com a internet ligada.';
     });
 }
+
+// eventos do download nativo: progresso, fim, erro e permissão
+(function ligarEventosDoApkUpdate() {
+  const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
+  if (!nativo || !nativo.addListener) return;
+  const nota = () => $('updNotas');
+  const botao = () => $('btnAtualizar');
+  nativo.addListener('progresso', (d) => {
+    if (nota() && d && d.pct != null) {
+      nota().textContent = `Baixando a atualização dentro do app... ${d.pct}%`;
+    }
+  });
+  nativo.addListener('concluido', () => {
+    if (nota()) nota().textContent = 'Download concluído. Abrindo a instalação do Android...';
+  });
+  nativo.addListener('erro', (d) => {
+    if (nota()) nota().textContent = 'Não consegui baixar: ' + ((d && d.mensagem) || 'erro')
+      + '. Toque em Atualizar agora para tentar de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+  nativo.addListener('permissao', () => {
+    if (nota()) nota().textContent = 'Permita "Instalar apps desconhecidos" para o aplicativo e toque em Atualizar agora de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+})();
 
 // ============================================================
 //  AJUSTES — o barbeiro troca o endereco do servidor pelo proprio
@@ -814,6 +891,22 @@ function abrirAjustes() {
   $('updStatus').textContent = repoSalvo()
     ? `Versão mais recente: ${CONFIG.APP_VERSION}`
     : 'Atualizações automáticas desligadas.';
+  const statusPush = $('pushStatus');
+  if (statusPush) {
+    const PN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
+    if (!PN) {
+      statusPush.textContent = 'Notificações: disponíveis apenas no aplicativo Android.';
+    } else {
+      statusPush.textContent = 'Notificações: verificando...';
+      PN.checkPermissions().then((p) => {
+        statusPush.textContent = p.receive === 'granted'
+          ? 'Notificações: ativadas ✅'
+          : 'Notificações: BLOQUEADAS ⚠️ Ative em Configurações do Android > Apps > Barbearia do Jota > Notificações.';
+      }).catch(() => {
+        statusPush.textContent = 'Notificações: não foi possível verificar.';
+      });
+    }
+  }
   $('modalAjustes').classList.remove('hidden');
 }
 
@@ -1929,24 +2022,62 @@ function ajustarTarjaDoTopo() {
 
 // ===== NOTIFICACOES PUSH (FCM) =====
 // Registra o token FCM no servidor para receber notificacoes mesmo com o app fechado
+const LS_PUSH_TOKEN = 'barbearia_push_token_v1';
+
+// manda o token para o servidor testando todos os enderecos (nuvem, local...)
+async function enviarTokenPush(valor, app) {
+  if (!valor) return false;
+  const corpo = JSON.stringify({ token: valor, app: app || 'cliente', version: CONFIG.APP_VERSION });
+  const lista = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
+  for (const base of lista) {
+    try {
+      const r = await fetch(base + '/api/push-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: corpo,
+      });
+      if (r.ok) {
+        apiBaseAtual = base;
+        localStorage.setItem(LS_PUSH_TOKEN, valor);
+        console.log('[push] token registrado no servidor:', base);
+        return true;
+      }
+    } catch (e) { /* tenta o proximo endereco */ }
+  }
+  console.warn('[push] nao consegui mandar o token para o servidor agora');
+  return false;
+}
+
 async function registrarPush() {
   try {
     if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.PushNotifications) return;
     const PushNotifications = window.Capacitor.Plugins.PushNotifications;
-    // pede permissao
-    const perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== 'granted') return;
-    // registra no FCM
-    await PushNotifications.register();
-    // quando o token chegar, envia para o servidor
+
+    // canal de alta prioridade (Android 8+): sem ele a notificacao pode
+    // chegar "calada", sem aparecer na tela
+    try {
+      await PushNotifications.createChannel({
+        id: 'barbearia_atualizacoes',
+        name: 'Atualizações do app',
+        description: 'Avisos de novas versões e novidades',
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+        lights: true,
+        lightColor: '#d4af37',
+      });
+    } catch (e) { /* Android antigo nao tem canal */ }
+
+    // Os ouvintes TEM que vir ANTES do register(): senao o token chega
+    // antes de existir quem escute e o aparelho fica sem notificacao.
     PushNotifications.addListener('registration', async (token) => {
-      try {
-        await fetch(apiBaseAtual + '/api/push-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: token.value, app: 'cliente', version: CONFIG.APP_VERSION }),
-        });
-      } catch { /* sem internet, tenta depois */ }
+      if (!token || !token.value) return;
+      localStorage.setItem(LS_PUSH_TOKEN, token.value);
+      const ok = await enviarTokenPush(token.value, 'cliente');
+      if (!ok) setTimeout(() => enviarTokenPush(token.value, 'cliente'), 15000);
+    });
+    PushNotifications.addListener('registrationError', (erro) => {
+      console.warn('[push] erro no registro:', JSON.stringify(erro || {}));
     });
     // quando uma notificacao chegar com o app aberto
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
@@ -1959,6 +2090,19 @@ async function registrarPush() {
         checarAtualizacao({ silencioso: false });
       }
     });
+
+    // pede permissao (Android 13+)
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive !== 'granted') {
+      console.warn('[push] permissao de notificacao negada pelo Android');
+      return;
+    }
+    await PushNotifications.register();
+
+    // o servidor pode ter perdido a lista de tokens (deploy no Render):
+    // manda de novo o token que ja estava salvo no aparelho
+    const salvo = localStorage.getItem(LS_PUSH_TOKEN);
+    if (salvo) enviarTokenPush(salvo, 'cliente');
   } catch (e) {
     console.warn('[push] erro ao registrar:', e.message);
   }
