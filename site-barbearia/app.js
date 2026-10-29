@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.45',
+  APP_VERSION: '1.0.46',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -816,15 +816,6 @@ function abrirAjustes() {
     ? `Versão mais recente: ${CONFIG.APP_VERSION}`
     : 'Atualizações automáticas desligadas.';
   const statusPush = $('pushStatus');
-  const recebido = $('pushRecebido');
-  if (recebido) {
-    try {
-      const up = JSON.parse(localStorage.getItem(LS_ULTIMO_PUSH) || 'null');
-      recebido.textContent = up
-        ? `Última notificação recebida: ${new Date(up.em).toLocaleString('pt-BR')} — ${up.titulo || ''}`
-        : 'Nenhuma notificação recebida neste aparelho ainda.';
-    } catch { recebido.textContent = '—'; }
-  }
   if (statusPush) {
     const PN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
     if (!PN) {
@@ -1956,7 +1947,6 @@ function ajustarTarjaDoTopo() {
 // ===== NOTIFICACOES PUSH (FCM) =====
 // Registra o token FCM no servidor para receber notificacoes mesmo com o app fechado
 const LS_PUSH_TOKEN = 'barbearia_push_token_v1';
-const LS_ULTIMO_PUSH = 'barbearia_ultimo_push_v1';
 
 // manda o token para o servidor testando todos os enderecos (nuvem, local...)
 async function enviarTokenPush(valor, app) {
@@ -2015,13 +2005,6 @@ async function registrarPush() {
     });
     // quando uma notificacao chegar com o app aberto
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      try {
-        localStorage.setItem(LS_ULTIMO_PUSH, JSON.stringify({
-          em: new Date().toISOString(),
-          titulo: notification.title || '',
-          corpo: notification.body || '',
-        }));
-      } catch { /* ignora */ }
       toast(notification.title || 'Nova notificacao');
     });
     // quando o usuario toca na notificacao
