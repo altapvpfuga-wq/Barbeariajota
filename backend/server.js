@@ -1007,6 +1007,62 @@ async function obterUltimaRelease() {
   }
 }
 
+// ============================================================
+//  Link curto para baixar o APK (facilita digitar no celular)
+// ============================================================
+async function versaoParaDownload() {
+  if (ultimaVersaoNotificada) return ultimaVersaoNotificada;
+  try {
+    const rel = await obterUltimaRelease();
+    return rel.versao;
+  } catch {
+    return '1.0.50';
+  }
+}
+
+app.get('/apk', async (req, res) => {
+  try {
+    const v = await versaoParaDownload();
+    res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}/Barbearia-do-Jota-v${v}.apk`);
+  } catch (e) {
+    res.status(500).send('nao consegui achar a versao: ' + e.message);
+  }
+});
+
+app.get('/painel', async (req, res) => {
+  try {
+    const v = await versaoParaDownload();
+    res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}/Painel-v${v}.apk`);
+  } catch (e) {
+    res.status(500).send('nao consegui achar a versao: ' + e.message);
+  }
+});
+
+app.get('/instalar', (req, res) => {
+  res.type('html').send(`<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instalar apps - Barbearia do Jota</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0d0d0d;color:#f5f5f5;
+       margin:0;padding:28px 18px;text-align:center}
+  h1{font-size:22px;margin:8px 0 4px}
+  p{color:#bdbdbd;font-size:15px;line-height:1.5}
+  a{display:block;margin:16px auto;max-width:420px;padding:18px 16px;border-radius:14px;
+    text-decoration:none;font-weight:700;font-size:18px}
+  .c{background:#d4af37;color:#1a1a1a}
+  .p{background:#2b2b2b;color:#f5f5f5;border:1px solid #444}
+  small{color:#8a8a8a}
+</style></head><body>
+<h1>💈 Barbearia do Jota</h1>
+<p>Toque no app que voce quer instalar/atualizar.<br>
+Se o Android perguntar, permita <b>instalar apps desconhecidos</b>.</p>
+<a class="c" href="/apk">📱 Baixar app do CLIENTE</a>
+<a class="p" href="/painel">🖥️ Baixar app do PAINEL</a>
+<p><small>Depois de instalar, as proximas atualizacoes acontecem dentro do proprio app.</small></p>
+</body></html>`);
+});
+
 async function checarAtualizacaoGitHub() {
   if (!firebaseOk) {
     ultimaChecagem = { em: new Date().toISOString(), erro: 'Firebase sem credenciais' };
