@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.50',
+  APP_VERSION: '1.0.51',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -820,8 +820,18 @@ function baixarEInstalar(url) {
   localStorage.removeItem(LS_UPDATE_PARA);
 
   const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
+  const dentroDoApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   if (!nativo) {
-    // iPhone/iPad: o app e o proprio site — atualizar e recarregar a pagina
+    if (dentroDoApp) {
+      // NUNCA abre navegador de dentro do aplicativo. Se o instalador
+      // interno nao carregou, avisa e pede para instalar o APK novo 1 vez.
+      $('updNotas').textContent = 'O instalador interno nao carregou neste aparelho. Instale o APK mais novo uma vez (nao abre o Chrome).';
+      $('btnAtualizar').disabled = false;
+      $('btnAtualizar').textContent = '🔁 Tentar de novo';
+      $('btnAtualizar').onclick = () => baixarEInstalar(url);
+      return;
+    }
+    // iPhone/iPad: o app e o proprio site - atualizar e recarregar a pagina
     const ehIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (ehIOS) {

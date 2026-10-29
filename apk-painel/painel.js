@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.50',
+  APP_VERSION: '1.0.51',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -824,7 +824,16 @@ function baixarEInstalar(url) {
   if (!url) return;
   localStorage.removeItem(LS_ADIA);
   const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
+  const dentroDoApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   if (!nativo) {
+    if (dentroDoApp) {
+      // NUNCA abre navegador de dentro do aplicativo
+      $('updNotas').textContent = 'O instalador interno nao carregou neste aparelho. Instale o APK mais novo uma vez (nao abre o Chrome).';
+      $('btnAtualizar').disabled = false;
+      $('btnAtualizar').textContent = '🔁 Tentar de novo';
+      $('btnAtualizar').onclick = () => baixarEInstalar(url);
+      return;
+    }
     const a = document.createElement('a');
     a.href = url;
     document.body.appendChild(a);

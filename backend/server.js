@@ -1016,7 +1016,7 @@ async function versaoParaDownload() {
     const rel = await obterUltimaRelease();
     return rel.versao;
   } catch {
-    return '1.0.50';
+    return '1.0.51';
   }
 }
 
