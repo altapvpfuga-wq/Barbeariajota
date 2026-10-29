@@ -250,6 +250,7 @@ app.get('/api/health', (req, res) => {
       cliente: firebaseClienteOk,
       painel: firebasePainelOk,
       tokens: loadPushTokens().length,
+      ultimo: ultimoPush,
     },
   });
 });
@@ -538,6 +539,7 @@ app.post('/api/webhook/infinitypay', (req, res) => {
 //  PUSH NOTIFICATIONS (FCM): recebe tokens e envia notificacoes
 // ============================================================
 const PUSH_TOKENS_FILE = path.join(__dirname, 'push-tokens.json');
+let ultimoPush = null; // fica visivel em /api/health para conferir o envio
 function loadPushTokens() {
   try {
     if (!fs.existsSync(PUSH_TOKENS_FILE)) return [];
@@ -668,7 +670,9 @@ async function enviarPush(titulo, corpo, dados) {
     if (validos.length !== tokens.length) savePushTokens(validos);
   }
 
-  return { ok: okCliente || okPainel, cliente: okCliente, painel: okPainel, tokens: tokens.length };
+  const resumo = { ok: okCliente || okPainel, cliente: okCliente, painel: okPainel, tokens: tokens.length };
+  ultimoPush = { titulo, em: new Date().toISOString(), ...resumo };
+  return resumo;
 }
 
 // endpoint para enviar notificacao de atualizacao manualmente
@@ -725,12 +729,12 @@ async function checarAtualizacaoGitHub() {
     ultimaVersaoNotificada = versao;
     try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
     // envia push notification para todos os apps inscritos
-    enviarPush(
+    const resultadoPush = await enviarPush(
       'Atualização disponível!',
       `Nova versão ${versao} do app disponível. Toque para atualizar.`,
       { tipo: 'atualizacao', versao }
     );
-    console.log(`[push] notificacao de atualizacao v${versao} enviada`);
+    console.log(`[push] notificacao de atualizacao v${versao} enviada`, resultadoPush);
   } catch (e) {
     console.warn('[push] erro ao checar GitHub:', e.message);
   }
