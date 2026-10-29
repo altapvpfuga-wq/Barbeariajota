@@ -576,6 +576,9 @@ const CANAL_ANDROID = 'barbearia_atualizacoes';
 function messagingDoApp(nomeApp) {
   return nomeApp === 'painel' ? messagingPainel : messagingCliente;
 }
+function appDoNome(nomeApp) {
+  return nomeApp === 'painel' ? firebasePainelApp : firebaseClienteApp;
+}
 function topicoDoApp(nomeApp) {
   return nomeApp === 'painel' ? TOPICO_PAINEL : TOPICO_CLIENTE;
 }
@@ -737,6 +740,25 @@ app.post('/api/push-teste', async (req, res) => {
   res.json({ ok: r.ok, resultado: r, aviso: 'A notificação deve chegar em alguns segundos, mesmo com o app fechado.' });
 });
 
+// pergunta ao Google em quais topicos este token esta inscrito
+async function topicosDoToken(nomeApp, token) {
+  const appFirebase = appDoNome(nomeApp);
+  if (!appFirebase) return { erro: 'sem credenciais' };
+  try {
+    const cred = appFirebase.options && appFirebase.options.credential;
+    const { access_token } = await cred.getAccessToken();
+    const r = await fetch(`https://iid.googleapis.com/iid/info/${encodeURIComponent(token)}?details=true`, {
+      headers: { Authorization: `Bearer ${access_token}`, access_token_auth: 'true' },
+    });
+    const texto = await r.text();
+    if (!r.ok) return { erro: `HTTP ${r.status}`, corpo: texto.slice(0, 300) };
+    const j = JSON.parse(texto);
+    return { topicos: Object.keys((j.rel && j.rel.topics) || {}) };
+  } catch (e) {
+    return { erro: e.message };
+  }
+}
+
 // diagnostico: manda DIRETO para cada aparelho, SEM canal fixo.
 // Assim, se o problema for o canal de notificacao, aqui chega.
 app.post('/api/push-diag', async (req, res) => {
@@ -745,8 +767,10 @@ app.post('/api/push-diag', async (req, res) => {
   const resultados = [];
   for (const t of tokens) {
     const messaging = messagingDoApp(t.app);
+    const item = { app: t.app, versao: t.version, token: mascararToken(t.token) };
+    item.topicos = await topicosDoToken(t.app, t.token);
     if (!messaging) {
-      resultados.push({ app: t.app, token: mascararToken(t.token), ok: false, erro: 'sem credenciais Firebase' });
+      resultados.push({ ...item, ok: false, erro: 'sem credenciais Firebase' });
       continue;
     }
     try {
@@ -756,16 +780,16 @@ app.post('/api/push-diag', async (req, res) => {
         data: { tipo: 'teste' },
         android: { priority: 'high' },
       });
-      resultados.push({ app: t.app, versao: t.version, token: mascararToken(t.token), ok: true, id });
+      resultados.push({ ...item, ok: true, id });
     } catch (e) {
-      resultados.push({ app: t.app, versao: t.version, token: mascararToken(t.token), ok: false, erro: e.code || e.message });
+      resultados.push({ ...item, ok: false, erro: e.code || e.message });
     }
   }
   res.json({
     total: tokens.length,
     projetos: projetosFirebase,
     resultados,
-    dica: 'Se der ok=true e nao aparecer no celular, o Android esta bloqueando as notificacoes do app.',
+    dica: 'traga este JSON de volta: ele mostra o erro exato do Firebase e se o aparelho esta inscrito no topico.',
   });
 });
 
