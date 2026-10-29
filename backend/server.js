@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // Backend da Barbearia do Jota
 //
 // O QUE ELE FAZ (duas opcoes, voce escolhe no .env):
@@ -12,7 +12,10 @@
 //     O servidor guarda como o link estava quando o agendamento comecou
 //     e so confirma se o pagamento caiu DEPOIS disso.
 //
-//   API usada:
+//   Provedor de pagamento (pagamento/): InfinitePay por padrao.
+//   Troque via PAGAMENTO_PROVIDER no .env (ver pagamento/README.md).
+//
+//   API usada (InfinitePay):
 //     POST https://api.checkout.infinitepay.io/links          (cria cobranca)
 //     POST https://api.checkout.infinitepay.io/payment_check  (confere se caiu)
 //
@@ -36,6 +39,9 @@ const cors = require('cors');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
+
+// provedor de pagamento (InfinitePay por padrao; troque via PAGAMENTO_PROVIDER)
+const pagamento = require('./pagamento');
 
 // ---------- Firebase Admin (push notifications) ----------
 // Dois projetos Firebase: um para o cliente, outro para o painel
@@ -100,14 +106,12 @@ messagingPainel = criarMessaging(firebasePainelApp);
 const firebaseOk = !!messagingCliente || !!messagingPainel;
 
 // ---------- configuracoes (todas no .env) ----------
+// Provedor de pagamento (ver backend/pagamento/README.md)
 const MODO = (process.env.MODO_PAGAMENTO || 'link_unico').trim();   // link_unico | link_fixo
-const API_KEY = (process.env.INFINITYPAY_API_KEY || '').trim();
-const HANDLE = (process.env.INFINITEPAY_HANDLE || '').trim();
 const LINK_FIXO = (process.env.INFINITEPAY_LINK || '').trim();
 const SLUG_FIXO = (process.env.INFINITEPAY_LINK_SLUG || '').trim();
 const SIGNAL_VALUE = Number(process.env.SIGNAL_VALUE || 10);
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').trim();
-const API = 'https://api.checkout.infinitepay.io';
 const DB_FILE = path.join(__dirname, 'pagamentos.json');
 
 // ============================================================
@@ -193,46 +197,6 @@ function setPagamento(id, patch) {
 }
 const centavos = (v) => Math.round(Number(v || 0) * 100);
 
-// ---------- InfinitePay ----------
-async function chamar(metodo, rota, corpo) {
-  const res = await fetch(`${API}${rota}`, {
-    method: metodo,
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    ...(corpo ? { body: JSON.stringify(corpo) } : {}),
-  });
-  const texto = await res.text();
-  let dados = {};
-  try { dados = texto ? JSON.parse(texto) : {}; } catch { dados = { raw: texto }; }
-  if (!res.ok) throw new Error(`InfinitePay ${res.status}: ${dados.message || texto.slice(0, 160)}`);
-  return dados;
-}
-
-// o link vem como https://checkout.infinitepay.io/<handle>?lenc=<SLUG>.v1.<checksum>
-const extrairSlug = (url) => (url && url.split('lenc=')[1] ? url.split('lenc=')[1].split('.v1')[0] : null);
-
-async function linkJaFoiPago(slug) {
-  if (!slug) return false;
-  const r = await chamar('POST', '/payment_check', { handle: HANDLE, slug });
-  return r.success === true || Number(r.paid_amount || 0) > 0;
-}
-
-async function criarCobranca({ nsu, descricao }) {
-  const link = await chamar('POST', '/links', {
-    handle: HANDLE,
-    order_nsu: nsu,
-    items: [{ quantity: 1, price: centavos(SIGNAL_VALUE), description: descricao.slice(0, 120) }],
-    ...(PUBLIC_BASE_URL ? {
-      redirect_url: `${PUBLIC_BASE_URL}/?pago=${encodeURIComponent(nsu)}`,
-      webhook_url: `${PUBLIC_BASE_URL}/api/webhook/infinitypay`,
-    } : {}),
-  });
-  const url = link.url || null;
-  return { url, slug: link.invoice_slug || link.slug || extrairSlug(url) };
-}
 
 // ============================================================
 // ROTAS
@@ -242,8 +206,8 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     modo: MODO,
-    infinitepay: API_KEY && HANDLE ? 'configurado' : 'sem credenciais',
-    handle: HANDLE || null,
+    pagamento: pagamento.nome,
+    configurado: pagamento.estaConfigurado(),
     sinal: SIGNAL_VALUE,
     linkFixo: MODO === 'link_fixo' ? LINK_FIXO : null,
     aguardando: Object.values(loadDB().pagamentos).filter((p) => !p.pago).length,
@@ -308,7 +272,7 @@ app.get('/api/ocupados', (req, res) => {
   res.json({ ocupados });
 });
 
-// Painel (APK do barbeiro, com PIN): tudo — status + agendamentos
+// Painel (APK do barbeiro, com PIN): tudo â€” status + agendamentos
 app.get('/api/painel', (req, res) => {
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
   const p = loadPainel();
@@ -339,7 +303,7 @@ app.post('/api/painel/pago', (req, res) => {
   if (!registro || !registro.pago) {
     setPagamento(id, { pago: true, confirmadoEm: new Date().toISOString(), confirmadoPor: 'barbeiro' });
   }
-  // avisa o APLICATIVO do cliente pelo canal — o dele muda na hora
+  // avisa o APLICATIVO do cliente pelo canal â€” o dele muda na hora
   publicarCanal({ t: 'p', b: { id, pixStatus: 'pago', status: 'confirmado' } });
   console.log(`[painel] pago confirmado na mao: ${id}`);
   res.json({ ok: true });
@@ -424,12 +388,12 @@ app.post('/api/agendar', (req, res) => {
     recebidoEm: jaTinha ? p.agendamentos[b.id].recebidoEm : new Date().toISOString(),
   };
   savePainel(p);
-  console.log(`[painel] agendamento ${b.id} — ${b.clientName || '?'} · ${b.dateLabel || '?'} ${b.time || ''} (${b.payMethod || '?'})`);
+  console.log(`[painel] agendamento ${b.id} â€” ${b.clientName || '?'} Â· ${b.dateLabel || '?'} ${b.time || ''} (${b.payMethod || '?'})`);
   // avisa o painel no celular quando chega um agendamento novo
   if (!jaTinha) {
     const detalhe = [b.clientName, b.serviceName, b.dateLabel, b.time]
       .filter((x) => x != null && String(x).trim() !== '')
-      .join(' · ');
+      .join(' Â· ');
     enviarPush(
       'Novo agendamento!',
       detalhe || 'Chegou um novo agendamento no painel.',
@@ -449,8 +413,8 @@ app.post('/api/aguardar', async (req, res) => {
   try {
     const { bookingId, serviceName, dateLabel, time, clientName } = req.body || {};
     if (!bookingId) return res.status(400).json({ error: 'Falta o bookingId.' });
-    if (!API_KEY || !HANDLE) {
-      return res.status(503).json({ error: 'SEM_CREDENCIAIS', message: 'Backend sem a chave da InfinitePay.' });
+    if (!pagamento.estaConfigurado()) {
+      return res.status(503).json({ error: 'SEM_CREDENCIAIS', message: `Backend sem credenciais do provedor ${pagamento.nome}.` });
     }
 
     // ja respondido antes? devolve o mesmo link
@@ -489,7 +453,7 @@ app.post('/api/aguardar', async (req, res) => {
     }
 
     // ---- modo link_unico: uma cobranca so para este agendamento ----
-    const { url, slug } = await criarCobranca({ nsu: bookingId, descricao });
+    const { url, slug } = await pagamento.criarCobranca({ nsu: bookingId, descricao, valor, publicBaseUrl: PUBLIC_BASE_URL });
     const r = setPagamento(bookingId, {
       modo: 'link_unico', link: url, slug, jaPagoAntes: false, pago: false,
       valor, descricao, cliente: clientName || '', criadoEm: new Date().toISOString(),
@@ -498,7 +462,7 @@ app.post('/api/aguardar', async (req, res) => {
     return res.json({ modo: 'link_unico', link: r.link, valor });
   } catch (e) {
     console.error('[aguardar]', e.message);
-    return res.status(500).json({ error: 'ERRO_INFINITEPAY', message: e.message });
+    return res.status(500).json({ error: 'ERRO_PAGAMENTO', message: e.message });
   }
 });
 
@@ -512,7 +476,7 @@ app.get('/api/conferir/:bookingId', async (req, res) => {
     if (!registro) return res.status(404).json({ pago: false, erro: 'Agendamento nao encontrado.' });
     if (registro.pago) return res.json({ pago: true, valor: registro.valor });
 
-    const caiu = await linkJaFoiPago(registro.slug);
+    const caiu = await pagamento.foiPago(registro.slug);
     console.log(`[pix] conferindo ${bookingId} -> caiu=${caiu}`);
 
     if (caiu && !registro.jaPagoAntes) {
@@ -546,8 +510,7 @@ app.post('/api/webhook/infinitypay', (req, res) => {
   res.sendStatus(200);
   try {
     const b = req.body || {};
-    const slug = b.invoice_slug || b.invoiceSlug || b.slug
-      || (b.data && (b.data.invoice_slug || b.data.invoiceSlug || b.data.slug));
+    const slug = pagamento.extrairSlugDoWebhook(b);
     if (!slug) return;
     const achado = Object.values(loadDB().pagamentos).find((p) => p.slug === slug);
     if (!achado) return;
@@ -798,14 +761,14 @@ app.post('/api/push-atualizacao', async (req, res) => {
     urlPainel: pasta ? `${pasta}/Painel-v${v}.apk` : '',
   };
   const rCliente = await enviarPush(
-    'Atualização do app do cliente!',
-    `Versão ${v || 'nova'} disponível. Toque para atualizar.`,
+    'AtualizaÃ§Ã£o do app do cliente!',
+    `VersÃ£o ${v || 'nova'} disponÃ­vel. Toque para atualizar.`,
     dados,
     { alvos: { cliente: true, painel: false }, tag: 'barbearia-atualizacao-cliente' }
   );
   const rPainel = await enviarPush(
-    'Atualização do Painel!',
-    `Versão ${v || 'nova'} disponível. Toque para atualizar.`,
+    'AtualizaÃ§Ã£o do Painel!',
+    `VersÃ£o ${v || 'nova'} disponÃ­vel. Toque para atualizar.`,
     dados,
     { alvos: { cliente: false, painel: true }, tag: 'barbearia-atualizacao-painel' }
   );
@@ -815,8 +778,8 @@ app.post('/api/push-atualizacao', async (req, res) => {
 // teste manual do push (app precisa ter sido aberto ao menos uma vez)
 app.post('/api/push-teste', async (req, res) => {
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
-  const r = await enviarPush('Teste de notificação', 'Se você recebeu isso com o app fechado, está funcionando!', { tipo: 'teste' });
-  res.json({ ok: r.ok, resultado: r, aviso: 'A notificação deve chegar em alguns segundos, mesmo com o app fechado.' });
+  const r = await enviarPush('Teste de notificaÃ§Ã£o', 'Se vocÃª recebeu isso com o app fechado, estÃ¡ funcionando!', { tipo: 'teste' });
+  res.json({ ok: r.ok, resultado: r, aviso: 'A notificaÃ§Ã£o deve chegar em alguns segundos, mesmo com o app fechado.' });
 });
 
 // pergunta ao Google em quais topicos este token esta inscrito
@@ -900,7 +863,7 @@ app.post('/api/push-topicos', async (req, res) => {
     try {
       const id = await messaging.send({
         topic: topicoDoApp(nomeApp),
-        notification: { title: 'Teste por tópico', body: 'Se isso chegou, o tópico está funcionando.' },
+        notification: { title: 'Teste por tÃ³pico', body: 'Se isso chegou, o tÃ³pico estÃ¡ funcionando.' },
         data: { tipo: 'teste' },
         android: { priority: 'high' },
       });
@@ -936,7 +899,7 @@ let ultimoAutoTeste = 0;app.post('/api/push-auto-teste', async (req, res) => {
       // sem channelId: usa o canal padrao do FCM, que sempre existe
       await messaging.send({
         token: t.token,
-        notification: { title: 'Teste de notificação', body: 'Se você está vendo isso, está funcionando!' },
+        notification: { title: 'Teste de notificaÃ§Ã£o', body: 'Se vocÃª estÃ¡ vendo isso, estÃ¡ funcionando!' },
         data: { tipo: 'teste' },
         android: { priority: 'high' },
       });
@@ -1054,11 +1017,11 @@ app.get('/instalar', (req, res) => {
   .p{background:#2b2b2b;color:#f5f5f5;border:1px solid #444}
   small{color:#8a8a8a}
 </style></head><body>
-<h1>💈 Barbearia do Jota</h1>
+<h1>ðŸ’ˆ Barbearia do Jota</h1>
 <p>Toque no app que voce quer instalar/atualizar.<br>
 Se o Android perguntar, permita <b>instalar apps desconhecidos</b>.</p>
-<a class="c" href="/apk">📱 Baixar app do CLIENTE</a>
-<a class="p" href="/painel">🖥️ Baixar app do PAINEL</a>
+<a class="c" href="/apk">ðŸ“± Baixar app do CLIENTE</a>
+<a class="p" href="/painel">ðŸ–¥ï¸ Baixar app do PAINEL</a>
 <p><small>Depois de instalar, as proximas atualizacoes acontecem dentro do proprio app.</small></p>
 </body></html>`);
 });
@@ -1115,14 +1078,14 @@ async function checarAtualizacaoGitHub() {
       urlPainel: `${pasta}/Painel-v${versao}.apk`,
     };
     const pushCliente = await enviarPush(
-      'Atualização do app do cliente!',
-      `Versão ${versao} disponível. Toque para atualizar.`,
+      'AtualizaÃ§Ã£o do app do cliente!',
+      `VersÃ£o ${versao} disponÃ­vel. Toque para atualizar.`,
       dados,
       { alvos: { cliente: true, painel: false }, tag: 'barbearia-atualizacao-cliente' }
     );
     const pushPainel = await enviarPush(
-      'Atualização do Painel!',
-      `Versão ${versao} disponível. Toque para atualizar.`,
+      'AtualizaÃ§Ã£o do Painel!',
+      `VersÃ£o ${versao} disponÃ­vel. Toque para atualizar.`,
       dados,
       { alvos: { cliente: false, painel: true }, tag: 'barbearia-atualizacao-painel' }
     );
@@ -1149,7 +1112,7 @@ setTimeout(checarAtualizacaoGitHub, 10000);
 app.listen(PORT, () => {
   console.log(`\n  Barbearia do Jota - servidor na porta ${PORT}`);
   console.log(`  Modo: ${MODO}`);
-  console.log(`  InfinitePay: ${API_KEY && HANDLE ? `OK (${HANDLE})` : 'SEM CREDENCIAIS'}`);
+  console.log(`  Pagamento: ${pagamento.nome} ${pagamento.estaConfigurado() ? 'OK' : 'SEM CREDENCIAIS'}`);
   if (MODO === 'link_fixo') console.log(`  Link fixo: ${LINK_FIXO}`);
   console.log(`  Sinal: R$ ${SIGNAL_VALUE.toFixed(2)}`);
   console.log(`  Push (FCM): ${firebaseOk ? 'OK' : 'SEM CREDENCIAIS'}  |  tokens salvos: ${loadPushTokens().length}`);

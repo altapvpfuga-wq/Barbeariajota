@@ -6,5 +6,18 @@
     "fechaAs": "21:00",
     "atualizadoEm": "2026-10-24T00:15:14.319Z"
   },
-  "agendamentos": {}
+  "agendamentos": {
+    "teste123": {
+      "id": "teste123",
+      "clientName": "Teste",
+      "clientPhone": "",
+      "serviceName": "Corte",
+      "dateLabel": "2026-10-30",
+      "time": "10:00",
+      "payMethod": "pix",
+      "pixStatus": "aguardando",
+      "createdAt": "2026-10-29T16:30:35.656Z",
+      "recebidoEm": "2026-10-29T16:30:35.658Z"
+    }
+  }
 }
