@@ -597,21 +597,47 @@ function topicoDoApp(nomeApp) {
   return nomeApp === 'painel' ? TOPICO_PAINEL : TOPICO_CLIENTE;
 }
 
-// inscreve o aparelho no topico (pode chamar varias vezes, sem problema)
+// inscreve o aparelho no topico (pode chamar varias vezes, sem problema).
+// tenta a API nova e, se o Google negar permissao, a API antiga (IID).
 async function inscreverNoTopico(token, nomeApp) {
   const messaging = messagingDoApp(nomeApp);
   if (!messaging) return { ok: false, erro: 'sem credenciais' };
+  const topico = topicoDoApp(nomeApp);
+  const tentativas = [];
+
   try {
-    const r = await messaging.subscribeToTopic([token], topicoDoApp(nomeApp));
+    const r = await messaging.subscribeToTopic([token], topico);
     const ok = !!(r && r.successCount > 0);
     const erros = (r && r.errors ? r.errors : [])
       .map((e) => (e.error && (e.error.code || e.error.message)) || 'erro')
       .filter(Boolean);
-    console.log(`[push] topico ${topicoDoApp(nomeApp)} do ${nomeApp}: ${ok ? 'inscrito' : 'FALHOU'}`, erros);
-    return { ok, successCount: r && r.successCount, failureCount: r && r.failureCount, erros };
+    if (ok) {
+      console.log(`[push] topico ${topico} do ${nomeApp}: inscrito (api nova)`);
+      return { ok: true, via: 'nova', successCount: r.successCount, failureCount: r.failureCount, erros };
+    }
+    tentativas.push({ via: 'nova', erros });
   } catch (e) {
-    console.warn('[push] nao consegui inscrever no topico:', e.code || '', e.message);
-    return { ok: false, erro: e.code || e.message };
+    tentativas.push({ via: 'nova', erro: e.code || e.message });
+  }
+
+  try {
+    const r = await messaging.subscribeToTopicLegacy([token], topico);
+    const ok = !!(r && r.successCount > 0);
+    const erros = (r && r.errors ? r.errors : [])
+      .map((e) => (e.error && (e.error.code || e.error.message)) || 'erro')
+      .filter(Boolean);
+    console.log(`[push] topico ${topico} do ${nomeApp}: ${ok ? 'inscrito (api antiga)' : 'FALHOU (api antiga)'}`, erros);
+    return {
+      ok,
+      via: 'antiga',
+      successCount: r && r.successCount,
+      failureCount: r && r.failureCount,
+      erros,
+      tentativas,
+    };
+  } catch (e) {
+    console.warn('[push] topico falhou nas duas APIs:', e.code || '', e.message);
+    return { ok: false, erro: e.code || e.message, tentativas };
   }
 }
 
