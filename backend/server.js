@@ -793,6 +793,43 @@ app.post('/api/push-diag', async (req, res) => {
   });
 });
 
+// teste disparado pelo proprio app (botao em Ajustes). Sem PIN e limitado,
+// serve para o dono conferir a notificacao na hora.
+let ultimoAutoTeste = 0;
+app.post('/api/push-auto-teste', async (req, res) => {
+  if (Date.now() - ultimoAutoTeste < 8000) {
+    return res.status(429).json({ error: 'Aguarde alguns segundos e tente de novo.' });
+  }
+  ultimoAutoTeste = Date.now();
+  const tokens = loadPushTokens();
+  if (tokens.length === 0) {
+    return res.json({ ok: false, total: 0, enviados: 0, motivo: 'nenhum aparelho registrado ainda' });
+  }
+  const detalhes = [];
+  let enviados = 0;
+  for (const t of tokens) {
+    const messaging = messagingDoApp(t.app);
+    if (!messaging) {
+      detalhes.push({ app: t.app, ok: false, erro: 'sem credenciais Firebase' });
+      continue;
+    }
+    try {
+      // sem channelId: usa o canal padrao do FCM, que sempre existe
+      await messaging.send({
+        token: t.token,
+        notification: { title: 'Teste de notificação', body: 'Se você está vendo isso, está funcionando!' },
+        data: { tipo: 'teste' },
+        android: { priority: 'high' },
+      });
+      enviados++;
+      detalhes.push({ app: t.app, ok: true });
+    } catch (e) {
+      detalhes.push({ app: t.app, ok: false, erro: e.code || e.message });
+    }
+  }
+  res.json({ ok: enviados > 0, total: tokens.length, enviados, detalhes });
+});
+
 // forca uma checagem agora (para testar sem esperar os 5 minutos)
 app.post('/api/push-checar', async (req, res) => {
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });

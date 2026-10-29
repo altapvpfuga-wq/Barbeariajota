@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.43',
+  APP_VERSION: '1.0.44',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -816,6 +816,15 @@ function abrirAjustes() {
     ? `Versão mais recente: ${CONFIG.APP_VERSION}`
     : 'Atualizações automáticas desligadas.';
   const statusPush = $('pushStatus');
+  const recebido = $('pushRecebido');
+  if (recebido) {
+    try {
+      const up = JSON.parse(localStorage.getItem(LS_ULTIMO_PUSH) || 'null');
+      recebido.textContent = up
+        ? `Última notificação recebida: ${new Date(up.em).toLocaleString('pt-BR')} — ${up.titulo || ''}`
+        : 'Nenhuma notificação recebida neste aparelho ainda.';
+    } catch { recebido.textContent = '—'; }
+  }
   if (statusPush) {
     const PN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
     if (!PN) {
@@ -1897,6 +1906,39 @@ $('btnVerificarUpdate').onclick = async () => {
 
 // modo forçado: não precisa de botão na tela (use o [FORCAR] nas notas da release)
 // (o botao btnForcarUpdate foi removido do HTML)
+$('btnTestePush').onclick = async () => {
+  const status = $('pushTesteStatus');
+  if (!status) return;
+  status.textContent = 'Enviando teste...';
+  const PN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications;
+  try {
+    if (PN) {
+      const perm = await PN.checkPermissions();
+      if (perm.receive !== 'granted') {
+        status.textContent = 'Notificações BLOQUEADAS no Android. Ative em Configurações > Apps > Barbearia do Jota > Notificações.';
+        return;
+      }
+    }
+    const bases = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
+    let r = null;
+    for (const base of bases) {
+      try {
+        const resp = await fetch(base + '/api/push-auto-teste', { method: 'POST' });
+        if (resp.ok) { r = await resp.json(); break; }
+      } catch { /* tenta o proximo */ }
+    }
+    if (!r) { status.textContent = 'Não consegui falar com o servidor. Verifique a internet.'; return; }
+    if (!r.total) { status.textContent = 'O servidor ainda não recebeu este aparelho. Feche e abra o app e tente de novo.'; return; }
+    if (r.ok) {
+      status.textContent = `Teste enviado (${r.enviados}/${r.total}). Deve aparecer em alguns segundos.`;
+    } else {
+      const erro = (r.detalhes || []).map((d) => d.erro).filter(Boolean)[0] || 'erro desconhecido';
+      status.textContent = 'O Firebase recusou: ' + erro;
+    }
+  } catch (e) {
+    status.textContent = 'Erro: ' + e.message;
+  }
+};
 $('btnVerQr').onclick = abrirQrGrande;
 $('btnFecharQr').onclick = () => $('modalQr').classList.add('hidden');
 
@@ -1947,6 +1989,7 @@ function ajustarTarjaDoTopo() {
 // ===== NOTIFICACOES PUSH (FCM) =====
 // Registra o token FCM no servidor para receber notificacoes mesmo com o app fechado
 const LS_PUSH_TOKEN = 'barbearia_push_token_v1';
+const LS_ULTIMO_PUSH = 'barbearia_ultimo_push_v1';
 
 // manda o token para o servidor testando todos os enderecos (nuvem, local...)
 async function enviarTokenPush(valor, app) {
@@ -2005,6 +2048,13 @@ async function registrarPush() {
     });
     // quando uma notificacao chegar com o app aberto
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      try {
+        localStorage.setItem(LS_ULTIMO_PUSH, JSON.stringify({
+          em: new Date().toISOString(),
+          titulo: notification.title || '',
+          corpo: notification.body || '',
+        }));
+      } catch { /* ignora */ }
       toast(notification.title || 'Nova notificacao');
     });
     // quando o usuario toca na notificacao
