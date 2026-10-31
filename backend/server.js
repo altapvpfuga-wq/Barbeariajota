@@ -1056,10 +1056,10 @@ app.get('/api/atualizacao', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({
     cliente: v.cliente
-      ? { versao: v.cliente, url: `${BASE_PUBLICO}/download/cliente`, notas: v.notas }
+      ? { versao: v.cliente, url: v.urlCliente || `${BASE_PUBLICO}/download/cliente`, notas: v.notas }
       : null,
     painel: v.painel
-      ? { versao: v.painel, url: `${BASE_PUBLICO}/download/painel`, notas: v.notas }
+      ? { versao: v.painel, url: v.urlPainel || `${BASE_PUBLICO}/download/painel`, notas: v.notas }
       : null,
   });
 });
@@ -1080,20 +1080,24 @@ async function versaoParaDownload() {
 }
 
 app.get('/apk', async (req, res) => {
+  const v = lerVersaoLocal();
+  if (v.urlCliente) return res.redirect(302, v.urlCliente);
   if (fs.existsSync(arquivoApk('cliente'))) return res.redirect(302, '/download/cliente');
   try {
-    const v = await versaoParaDownload();
-    res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}/Barbearia-do-Jota-v${v}.apk`);
+    const ver = await versaoParaDownload();
+    res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${ver}/Barbearia-do-Jota-v${ver}.apk`);
   } catch (e) {
     res.status(500).send('nao consegui achar a versao: ' + e.message);
   }
 });
 
 app.get('/painel', async (req, res) => {
+  const v = lerVersaoLocal();
+  if (v.urlPainel) return res.redirect(302, v.urlPainel);
   if (fs.existsSync(arquivoApk('painel'))) return res.redirect(302, '/download/painel');
   try {
-    const v = await versaoParaDownload();
-    res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}/Painel-v${v}.apk`);
+    const ver = await versaoParaDownload();
+    res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${ver}/Painel-v${ver}.apk`);
   } catch (e) {
     res.status(500).send('nao consegui achar a versao: ' + e.message);
   }

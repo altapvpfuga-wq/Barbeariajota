@@ -27,7 +27,7 @@ const CONFIG = {
   //   3) este link direto (sempre funciona e NAO abre o Chrome)
   UPDATE_FALLBACK: {
     versao: '1.0.51',
-    url: 'https://files.catbox.moe/y3q9if.apk',
+    url: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk',
     // [FORCAR] faz o aviso aparecer uma vez mesmo em quem ja tem a 1.0.51
     // (garante que todos peguem esta correcao)
     notas: '[FORCAR] Correção da atualização e das notificações.',

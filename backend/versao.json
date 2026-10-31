@@ -1,5 +1,7 @@
 {
   "cliente": "1.0.51",
   "painel": "1.0.51",
+  "urlCliente": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk",
+  "urlPainel": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk",
   "notas": "Atualização baixada e instalada dentro do próprio app, sem abrir o navegador. Notificações corrigidas."
 }
