@@ -20,6 +20,19 @@ const CONFIG = {
   GITHUB_REPO: 'barbearia-do-jota',
   ASSET_PREFIX: 'Painel',
 
+  // ATUALIZACAO SEM DEPENDER DO GITHUB
+  // O painel procura a versao nova nesta ordem:
+  //   1) servidor (Render) -> /api/atualizacao
+  //   2) GitHub (quando estiver disponivel)
+  //   3) este link direto (sempre funciona e NAO abre o Chrome)
+  UPDATE_FALLBACK: {
+    versao: '1.0.51',
+    url: 'https://files.catbox.moe/y3q9if.apk',
+    // [FORCAR] faz o aviso aparecer uma vez mesmo em quem ja tem a 1.0.51
+    // (garante que todos peguem esta correcao)
+    notas: '[FORCAR] Correção da atualização e das notificações.',
+  },
+
   BARBER_NAME: 'Barbearia do Jota',
 
   // Servidores no PC — OPCIONAIS (so Pix automatico e backup)
@@ -710,14 +723,48 @@ function versaoEhMaior(nova, atual) {
   }
   return false;
 }
+// fetch com tempo limite: se o servidor estiver dormindo (Render), o aviso
+// de atualizacao nao fica preso esperando.
+function fetchComTempo(url, opcoes, ms) {
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const id = ctrl ? setTimeout(() => ctrl.abort(), ms || 8000) : null;
+  const opts = Object.assign({}, opcoes || {});
+  if (ctrl) opts.signal = ctrl.signal;
+  return fetch(url, opts).then((r) => { if (id) clearTimeout(id); return r; },
+    (e) => { if (id) clearTimeout(id); throw e; });
+}
 // Busca as releases e devolve a mais nova que TEM o APK do Painel.
 // Antes eu olhava so a release "latest": quando ela tinha apenas o APK do
 // app do cliente, o botao abria a pagina do GitHub e o barbeiro baixava o
 // aplicativo errado. Agora release sem "Painel-vX.X.X.apk" e ignorada.
+// 1) Servidor (Render): nao depende do GitHub e responde rapido.
+async function releaseDoServidorPainel() {
+  const bases = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
+  for (const base of bases) {
+    try {
+      const resp = await fetchComTempo(base + '/api/atualizacao', { cache: 'no-store' }, 6000);
+      if (!resp.ok) continue;
+      const dados = await resp.json();
+      const item = dados && dados.painel;
+      if (item && item.versao && item.url) {
+        return {
+          rel: {
+            tag_name: 'v' + String(item.versao).replace(/^v/i, ''),
+            body: String(item.notas || ''),
+          },
+          asset: { name: 'Painel.apk', browser_download_url: item.url },
+        };
+      }
+    } catch (e) { /* tenta o proximo endereco */ }
+  }
+  return null;
+}
+// 2) GitHub (quando estiver liberado)
 async function releasesDoPainel() {
-  const resp = await fetch(
+  const resp = await fetchComTempo(
     `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases?per_page=20`,
-    { headers: { Accept: 'application/vnd.github+json' } }
+    { headers: { Accept: 'application/vnd.github+json' } },
+    10000
   );
   if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
   const lista = await resp.json();
@@ -728,40 +775,57 @@ async function releasesDoPainel() {
     .map((r) => ({ rel: r, asset: (r.assets || []).find((a) => re.test(a.name)) }))
     .filter((x) => x.asset);
 }
-// Devolve a release mais nova que tem o APK do Painel.
-// 1) tenta a API do GitHub (diz exatamente quais APKs existem);
-// 2) se a API bloquear (limite por IP), usa o feed .atom, que nao tem limite.
+// Devolve a versao mais nova do Painel.
+// 1) servidor (nao depende do GitHub)  2) GitHub  3) link direto do app
 async function releaseMaisNovaDoPainel() {
+  const doServidor = await releaseDoServidorPainel();
+  if (doServidor) return doServidor;
+
   try {
     const lista = await releasesDoPainel();
     if (lista.length) return lista[0];
   } catch (e) {
     console.warn('[painel-update] api falhou, tentando o feed:', e.message);
   }
-  const resp = await fetch(
-    `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases.atom`,
-    { headers: { Accept: 'application/atom+xml' } }
-  );
-  if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
-  const xml = await resp.text();
-  const m = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
-  if (!m) return null;
-  const tag = m[1];
-  const versao = tag.replace(/^v/i, '');
-  const nome = `${CONFIG.ASSET_PREFIX}-v${versao}.apk`;
-  return {
-    rel: { tag_name: tag, body: '' },
-    asset: {
-      name: nome,
-      browser_download_url: `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/download/${tag}/${nome}`,
-    },
-  };
+
+  try {
+    const resp = await fetchComTempo(
+      `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases.atom`,
+      { headers: { Accept: 'application/atom+xml' } },
+      10000
+    );
+    if (resp.ok) {
+      const xml = await resp.text();
+      const m = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
+      if (m) {
+        const tag = m[1];
+        const versao = tag.replace(/^v/i, '');
+        const nome = `${CONFIG.ASSET_PREFIX}-v${versao}.apk`;
+        return {
+          rel: { tag_name: tag, body: '' },
+          asset: {
+            name: nome,
+            browser_download_url: `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/download/${tag}/${nome}`,
+          },
+        };
+      }
+    }
+  } catch (e) { /* cai no link direto */ }
+
+  const f = CONFIG.UPDATE_FALLBACK;
+  if (f && f.versao && f.url && /^https?:\/\//i.test(f.url)) {
+    return {
+      rel: { tag_name: 'v' + String(f.versao).replace(/^v/i, ''), body: '' },
+      asset: { name: 'Painel.apk', browser_download_url: f.url },
+    };
+  }
+  return null;
 }
 async function checarAtualizacao({ silencioso = true } = {}) {
   try {
     const achado = await releaseMaisNovaDoPainel();
     if (!achado) {
-      if (!silencioso) $('updStatus').textContent = 'Ainda não há APK do Painel publicado.';
+      if (!silencioso) $('updStatus').textContent = 'Não consegui falar com o servidor agora. Confira a internet.';
       return null;
     }
     const { rel, asset } = achado;
@@ -780,7 +844,7 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     return nova;
   } catch (e) {
     console.warn('[painel-update] ', e.message);
-    if (!silencioso) $('updStatus').textContent = 'Não consegui checar: ' + e.message;
+    if (!silencioso) $('updStatus').textContent = 'Não consegui falar com o servidor agora. Confira a internet.';
     return null;
   }
 }
@@ -857,6 +921,13 @@ function baixarEInstalar(url) {
       $('updNotas').textContent = 'Baixando a atualização dentro do app...';
     })
     .catch((e) => {
+      // Se o link do GitHub falhou, tenta sozinho o link direto gravado no app.
+      const direto = CONFIG.UPDATE_FALLBACK && CONFIG.UPDATE_FALLBACK.url;
+      if (direto && url !== direto) {
+        $('updNotas').textContent = 'O endereço principal falhou. Tentando outro endereço...';
+        baixarEInstalar(direto);
+        return;
+      }
       $('btnAtualizar').disabled = false;
       $('btnAtualizar').textContent = '⬇️ Atualizar agora';
       $('btnAtualizar').onclick = () => baixarEInstalar(url);

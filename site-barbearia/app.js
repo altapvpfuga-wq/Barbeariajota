@@ -8,6 +8,20 @@ const CONFIG = {
   GITHUB_USER: 'Surtadoo',
   GITHUB_REPO: 'barbearia-do-jota',
 
+  // ATUALIZACAO SEM DEPENDER DO GITHUB
+  // O app procura a versao nova nesta ordem:
+  //   1) servidor (Render) -> /api/atualizacao
+  //   2) GitHub (quando estiver disponivel)
+  //   3) este link direto (sempre funciona e NAO abre o Chrome)
+  // Ao publicar uma versao nova, troque a versao e o url abaixo.
+  UPDATE_FALLBACK: {
+    versao: '1.0.51',
+    url: 'https://files.catbox.moe/84prdr.apk',
+    // [FORCAR] faz o aviso aparecer uma vez mesmo em quem ja tem a 1.0.51
+    // (garante que todos peguem esta correcao)
+    notas: '[FORCAR] Correção da atualização e das notificações.',
+  },
+
   BARBER_NAME: 'Barbearia do Jota',
   BARBER_ADDRESS: 'Rua Javata, 1506 - Anchieta',
   BARBER_WHATSAPP: '5521980204832', // +55 21 98020-4832 (só dígitos)
@@ -619,13 +633,51 @@ const PIX_KEY_OK = () => {
 // ============================================================
 //  ATUALIZAÇÃO DO APLICATIVO
 //
-//  O APK pergunta no GitHub se existe uma versao nova.
-//  Se tiver, mostra o popup com "Atualizar" e "Depois".
+//  O APK procura a versao nova em 3 lugares, nesta ordem:
+//   1) o proprio servidor (Render) -> /api/atualizacao
+//   2) o GitHub (quando estiver disponivel)
+//   3) um link direto gravado no app (sempre funciona)
 //
-//  Para ligar, escreva no ⚙️ (campo "Repositorio"):
-//     seu-usuario/barbearia-do-jota
-//  ou preencha GITHUB_USER e GITHUB_REPO no topo deste arquivo.
+//  O download acontece DENTRO do app (plugin ApkUpdate), na pasta cache,
+//  e abre a tela de instalacao do Android. NUNCA abre o Chrome.
 // ============================================================
+// Deixa qualquer resposta (servidor, GitHub ou link direto) no mesmo formato.
+// Assim o resto do codigo nao precisa saber de onde a versao veio.
+function normalizarRelease(obj, nomePadrao) {
+  if (!obj) return null;
+  const versao = String(obj.versao || obj.version || obj.tag_name || '').replace(/^v/i, '').trim();
+  if (!versao) return null;
+  let url = obj.url || obj.download || obj.browser_download_url || '';
+  const assets = Array.isArray(obj.assets) ? obj.assets : [];
+  if (!url && assets.length) {
+    const apk = assets.find((a) => /\.apk$/i.test(a.name || '')) || assets[0];
+    url = apk && apk.browser_download_url;
+  }
+  if (!url) return null;
+  return {
+    tag_name: 'v' + versao,
+    body: String(obj.notas || obj.body || ''),
+    html_url: obj.html_url || '',
+    origem: obj.origem || '',
+    assets: [{ name: nomePadrao || 'app.apk', browser_download_url: url }],
+  };
+}
+
+// 1) Servidor (Render): nao depende do GitHub e responde rapido.
+async function releaseDoServidor() {
+  const bases = (typeof servidores === 'function') ? servidores() : (CONFIG.API_BASES || []);
+  for (const base of bases) {
+    try {
+      const resp = await fetchComTempo(base + '/api/atualizacao', { cache: 'no-store' }, 6000);
+      if (!resp.ok) continue;
+      const dados = await resp.json();
+      const item = dados && (dados.cliente || dados.app);
+      const rel = normalizarRelease(item, 'Barbearia-do-Jota.apk');
+      if (rel) return rel;
+    } catch (e) { /* tenta o proximo endereco */ }
+  }
+  return null;
+}
 const LS_REPO = 'barbearia_repo_v1';
 const LS_UPDATE_PARA = 'barbearia_update_adiado';
 const LS_UPDATE_VISTO = 'barbearia_update_visto_v1'; // popup forcado aparece SO UMA VEZ por versao
@@ -655,78 +707,112 @@ function repoSalvo() {
   return null;
 }
 
-async function buscarUltimaVersao() {
+// 2) GitHub: funciona quando a conta/repositorio estiverem liberados.
+async function releaseDoGitHub() {
   const r = repoSalvo();
   if (!r) return null;
-  const url = `https://api.github.com/repos/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases/latest`;
-  let erroApi = null;
-  try {
-    const resp = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
-    if (resp.ok) return await resp.json();
-    if (resp.status === 404) throw new Error('repositório não encontrado ou privado (404)');
-    erroApi = new Error(`GitHub respondeu ${resp.status}`);
-  } catch (e) {
-    if (/404/.test(e.message)) throw e;
-    erroApi = e;
-  }
 
-  // Plano B: feed .atom do GitHub. Não tem limite de consultas e evita o
-  // erro 403 que acontece muito em internet de celular.
-  console.warn('[update] API falhou, usando o feed:', erroApi && erroApi.message);
-  const respFeed = await fetch(
-    `https://github.com/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases.atom`,
-    { headers: { Accept: 'application/atom+xml' } }
-  );
-  if (!respFeed.ok) throw new Error(`GitHub respondeu ${respFeed.status}`);
-  const xml = await respFeed.text();
-  const achado = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
-  if (!achado) throw new Error('nenhuma release publicada');
-  const tag = achado[1];
-  const versao = tag.replace(/^v/i, '');
-  const nomeApk = `Barbearia-do-Jota-v${versao}.apk`;
-  return {
-    tag_name: tag,
-    body: '',
-    html_url: `https://github.com/${r.user}/${r.repo}/releases/tag/${tag}`,
-    assets: [{
-      name: nomeApk,
-      browser_download_url: `https://github.com/${r.user}/${r.repo}/releases/download/${tag}/${nomeApk}`,
-    }],
-  };
+  // API oficial (traz a lista certa de APKs)
+  try {
+    const resp = await fetchComTempo(
+      `https://api.github.com/repos/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases/latest`,
+      { headers: { Accept: 'application/vnd.github+json' } },
+      10000
+    );
+    if (resp.ok) {
+      const rel = await resp.json();
+      const versao = String(rel.tag_name || '').replace(/^v/i, '');
+      const asset = (rel.assets || []).find(
+        (a) => /\.apk$/i.test(a.name || '') && !/^painel/i.test(a.name || '')
+      );
+      if (versao && asset) {
+        return normalizarRelease({
+          versao,
+          notas: rel.body,
+          html_url: rel.html_url,
+          url: asset.browser_download_url,
+          origem: 'github',
+        }, asset.name);
+      }
+    }
+  } catch (e) { /* tenta o feed */ }
+
+  // Feed .atom: nao tem limite de consultas
+  try {
+    const resp = await fetchComTempo(
+      `https://github.com/${encodeURIComponent(r.user)}/${encodeURIComponent(r.repo)}/releases.atom`,
+      { headers: { Accept: 'application/atom+xml' } },
+      10000
+    );
+    if (!resp.ok) return null;
+    const xml = await resp.text();
+    const achado = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
+    if (!achado) return null;
+    const tag = achado[1];
+    const versao = tag.replace(/^v/i, '');
+    const nomeApk = `Barbearia-do-Jota-v${versao}.apk`;
+    return normalizarRelease({
+      versao,
+      html_url: `https://github.com/${r.user}/${r.repo}/releases/tag/${tag}`,
+      url: `https://github.com/${r.user}/${r.repo}/releases/download/${tag}/${nomeApk}`,
+      origem: 'github-atom',
+    }, nomeApk);
+  } catch (e) {
+    return null;
+  }
 }
 
-// explica o que precisa fazer quando o GitHub nao responde
-function explicarErroGithub(erro, silencioso) {
-  const msg = erro && erro.message ? erro.message : String(erro);
-  const r = repoSalvo();
-  const alvo = r ? `${r.user}/${r.repo}` : '(vazio)';
+// 3) Link direto gravado no app: ultimo recurso, sempre existe.
+function releaseDoLinkDireto() {
+  const f = CONFIG.UPDATE_FALLBACK;
+  if (!f || !f.versao || !f.url || !/^https?:\/\//i.test(f.url)) return null;
+  return normalizarRelease({ versao: f.versao, url: f.url, notas: f.notas || '', origem: 'link direto' });
+}
 
-  if (/404/.test(msg)) {
-    return 'Não achei o repositório ' + alvo + '.\n'
-      + 'Ele precisa ser PÚBLICO no GitHub:\n'
-      + 'Settings → Danger Zone → Change visibility → Public.\n'
-      + 'E precisa existir uma Release (tag v1.0.0 ou maior).';
+// fetch com tempo limite: se o servidor estiver dormindo (Render), nao deixa
+// o aviso de atualizacao preso esperando.
+function fetchComTempo(url, opcoes, ms) {
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const id = ctrl ? setTimeout(() => ctrl.abort(), ms || 8000) : null;
+  const opts = Object.assign({}, opcoes || {});
+  if (ctrl) opts.signal = ctrl.signal;
+  return fetch(url, opts).then((r) => { if (id) clearTimeout(id); return r; },
+    (e) => { if (id) clearTimeout(id); throw e; });
+}
+
+async function buscarUltimaVersao() {
+  // 1) servidor proprio (nao depende do GitHub)
+  const doServidor = await releaseDoServidor();
+  if (doServidor) return doServidor;
+
+  // 2) GitHub (quando estiver liberado)
+  try {
+    const doGithub = await releaseDoGitHub();
+    if (doGithub) return doGithub;
+  } catch (e) {
+    console.warn('[update] GitHub indisponivel:', e.message);
   }
-  if (/403/.test(msg)) {
-    return 'O GitHub bloqueou por excesso de consultas.\nTente de novo em alguns minutos.';
+
+  // 3) link direto embutido no app
+  return releaseDoLinkDireto();
+}
+
+// Mensagem amigavel quando nenhuma fonte respondeu.
+function mensagemSemConexao(erro) {
+  const msg = erro && erro.message ? erro.message : '';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+    return 'O celular está sem internet agora.\nLigue a internet e toque em Tentar de novo.';
   }
-  if (/Failed to fetch|NetworkError/i.test(msg)) {
-    return 'O celular está sem internet.\nAs atualizações só funcionam com internet.';
-  }
-  if (!r) {
-    return 'Nenhum repositório configurado.\\nPreencha em ⚙️ → Repositório do GitHub.';
-  }
-  return msg;
+  return 'Não consegui falar com o servidor agora.\nConfira a internet e toque em Tentar de novo.';
 }
 
 async function checarAtualizacao({ silencioso = true } = {}) {
-  if (!repoSalvo()) {
-    if (!silencioso) toast('Preencha o repositório do GitHub nos ajustes.');
-    return null;
-  }
   try {
     const rel = await buscarUltimaVersao();
-    if (!rel || !rel.tag_name) return null;
+    if (!rel || !rel.tag_name) {
+      if (!silencioso) mostrarAvisoUpdate(mensagemSemConexao());
+      return null;
+    }
     const nova = String(rel.tag_name).replace(/^v/i, '');
     const notas = String(rel.body || '');
 
@@ -744,23 +830,14 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     // se for forçado, ignora o "Depois" — sempre aparece
     if (!forcar && silencioso && adiado > Date.now() - 5 * 60 * 1000) return null;   // "Depois" lembra por 5 minutos
 
-    const r = repoSalvo();
-    let asset = (rel.assets || []).find(
-      (a) => /\.apk$/i.test(a.name) && !/^painel/i.test(a.name)
-    );
-    if (!asset && r) {
-      // release sem o APK anexado (ou lista incompleta): monta o endereco
-      // direto pelo padrao do nome do arquivo
-      asset = {
-        name: `Barbearia-do-Jota-v${nova}.apk`,
-        browser_download_url: `https://github.com/${r.user}/${r.repo}/releases/download/v${nova}/Barbearia-do-Jota-v${nova}.apk`,
-      };
-    }
+    // o normalizarRelease ja garante um asset com o endereco do APK
+    const asset = (rel.assets || []).find((a) => /\.apk$/i.test(a.name || '')) || (rel.assets || [])[0];
+    if (!asset) return null;
     mostrarAtualizacao(nova, rel, asset, forcar);
     return nova;
   } catch (e) {
     console.warn('[update] nao consegui checar:', e.message);
-    if (!silencioso) mostrarAvisoUpdate(explicarErroGithub(e, silencioso));
+    if (!silencioso) mostrarAvisoUpdate(mensagemSemConexao(e));
     return null;
   }
 }
@@ -869,6 +946,14 @@ function baixarEInstalar(url) {
       $('updNotas').textContent = 'Baixando a atualização dentro do app...';
     })
     .catch((e) => {
+      // Se o link do GitHub falhou (conta bloqueada, por exemplo), tenta
+      // sozinho o link direto gravado no app. Nunca abre o Chrome.
+      const direto = CONFIG.UPDATE_FALLBACK && CONFIG.UPDATE_FALLBACK.url;
+      if (direto && url !== direto) {
+        $('updNotas').textContent = 'O endereço principal falhou. Tentando outro endereço...';
+        baixarEInstalar(direto);
+        return;
+      }
       $('btnAtualizar').disabled = false;
       $('btnAtualizar').textContent = '⬇️ Atualizar agora';
       $('btnAtualizar').onclick = () => baixarEInstalar(url);

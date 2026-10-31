@@ -21,8 +21,9 @@ site-barbearia/android/app/capacitor.build.gradle
 site-barbearia/android/capacitor.settings.gradle
 
 # apks e arquivos grandes
-APK/
+/APK/
 *.apk
+!backend/apk/*.apk
 *.rar
 *.zip
 

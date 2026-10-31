@@ -13,12 +13,25 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.45',
+  APP_VERSION: '1.0.51',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
   GITHUB_REPO: 'barbearia-do-jota',
   ASSET_PREFIX: 'Painel',
+
+  // ATUALIZACAO SEM DEPENDER DO GITHUB
+  // O painel procura a versao nova nesta ordem:
+  //   1) servidor (Render) -> /api/atualizacao
+  //   2) GitHub (quando estiver disponivel)
+  //   3) este link direto (sempre funciona e NAO abre o Chrome)
+  UPDATE_FALLBACK: {
+    versao: '1.0.51',
+    url: 'https://files.catbox.moe/y3q9if.apk',
+    // [FORCAR] faz o aviso aparecer uma vez mesmo em quem ja tem a 1.0.51
+    // (garante que todos peguem esta correcao)
+    notas: '[FORCAR] Correção da atualização e das notificações.',
+  },
 
   BARBER_NAME: 'Barbearia do Jota',
 
@@ -228,14 +241,8 @@ function registrar(b, { avisaNovo = true } = {}) {
   salvarLocais(loc);
   if (novo && avisaNovo) {
     vibrar();
-    // notificacao do Android (aparece na barra, com som e vibração)
-    try {
-      const aviso = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Aviso;
-      if (aviso) aviso.notificar({
-        titulo: '💈 Novo agendamento!',
-        texto: `${b.clientName || 'Cliente'} — ${b.time || ''} · ${b.dateLabel || ''}`,
-      }).catch(() => {});
-    } catch { /* sem o plugin, fica o toast mesmo */ }
+    // NAO criamos notificacao local aqui: o servidor ja manda o push
+    // "Novo agendamento!" e o Android mostra na barra. Antes apareciam duas.
     toast(`📋 Novo agendamento!\n${b.clientName || ''} — ${b.time || ''} ${b.dateLabel || ''}`);
     pintarLista();
   }
@@ -716,14 +723,48 @@ function versaoEhMaior(nova, atual) {
   }
   return false;
 }
+// fetch com tempo limite: se o servidor estiver dormindo (Render), o aviso
+// de atualizacao nao fica preso esperando.
+function fetchComTempo(url, opcoes, ms) {
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const id = ctrl ? setTimeout(() => ctrl.abort(), ms || 8000) : null;
+  const opts = Object.assign({}, opcoes || {});
+  if (ctrl) opts.signal = ctrl.signal;
+  return fetch(url, opts).then((r) => { if (id) clearTimeout(id); return r; },
+    (e) => { if (id) clearTimeout(id); throw e; });
+}
 // Busca as releases e devolve a mais nova que TEM o APK do Painel.
 // Antes eu olhava so a release "latest": quando ela tinha apenas o APK do
 // app do cliente, o botao abria a pagina do GitHub e o barbeiro baixava o
 // aplicativo errado. Agora release sem "Painel-vX.X.X.apk" e ignorada.
+// 1) Servidor (Render): nao depende do GitHub e responde rapido.
+async function releaseDoServidorPainel() {
+  const bases = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
+  for (const base of bases) {
+    try {
+      const resp = await fetchComTempo(base + '/api/atualizacao', { cache: 'no-store' }, 6000);
+      if (!resp.ok) continue;
+      const dados = await resp.json();
+      const item = dados && dados.painel;
+      if (item && item.versao && item.url) {
+        return {
+          rel: {
+            tag_name: 'v' + String(item.versao).replace(/^v/i, ''),
+            body: String(item.notas || ''),
+          },
+          asset: { name: 'Painel.apk', browser_download_url: item.url },
+        };
+      }
+    } catch (e) { /* tenta o proximo endereco */ }
+  }
+  return null;
+}
+// 2) GitHub (quando estiver liberado)
 async function releasesDoPainel() {
-  const resp = await fetch(
+  const resp = await fetchComTempo(
     `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases?per_page=20`,
-    { headers: { Accept: 'application/vnd.github+json' } }
+    { headers: { Accept: 'application/vnd.github+json' } },
+    10000
   );
   if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
   const lista = await resp.json();
@@ -734,40 +775,57 @@ async function releasesDoPainel() {
     .map((r) => ({ rel: r, asset: (r.assets || []).find((a) => re.test(a.name)) }))
     .filter((x) => x.asset);
 }
-// Devolve a release mais nova que tem o APK do Painel.
-// 1) tenta a API do GitHub (diz exatamente quais APKs existem);
-// 2) se a API bloquear (limite por IP), usa o feed .atom, que nao tem limite.
+// Devolve a versao mais nova do Painel.
+// 1) servidor (nao depende do GitHub)  2) GitHub  3) link direto do app
 async function releaseMaisNovaDoPainel() {
+  const doServidor = await releaseDoServidorPainel();
+  if (doServidor) return doServidor;
+
   try {
     const lista = await releasesDoPainel();
     if (lista.length) return lista[0];
   } catch (e) {
     console.warn('[painel-update] api falhou, tentando o feed:', e.message);
   }
-  const resp = await fetch(
-    `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases.atom`,
-    { headers: { Accept: 'application/atom+xml' } }
-  );
-  if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
-  const xml = await resp.text();
-  const m = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
-  if (!m) return null;
-  const tag = m[1];
-  const versao = tag.replace(/^v/i, '');
-  const nome = `${CONFIG.ASSET_PREFIX}-v${versao}.apk`;
-  return {
-    rel: { tag_name: tag, body: '' },
-    asset: {
-      name: nome,
-      browser_download_url: `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/download/${tag}/${nome}`,
-    },
-  };
+
+  try {
+    const resp = await fetchComTempo(
+      `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases.atom`,
+      { headers: { Accept: 'application/atom+xml' } },
+      10000
+    );
+    if (resp.ok) {
+      const xml = await resp.text();
+      const m = xml.match(/<entry>[\s\S]*?<link[^>]*href="[^"]*\/releases\/tag\/([^"]+)"/i);
+      if (m) {
+        const tag = m[1];
+        const versao = tag.replace(/^v/i, '');
+        const nome = `${CONFIG.ASSET_PREFIX}-v${versao}.apk`;
+        return {
+          rel: { tag_name: tag, body: '' },
+          asset: {
+            name: nome,
+            browser_download_url: `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/download/${tag}/${nome}`,
+          },
+        };
+      }
+    }
+  } catch (e) { /* cai no link direto */ }
+
+  const f = CONFIG.UPDATE_FALLBACK;
+  if (f && f.versao && f.url && /^https?:\/\//i.test(f.url)) {
+    return {
+      rel: { tag_name: 'v' + String(f.versao).replace(/^v/i, ''), body: '' },
+      asset: { name: 'Painel.apk', browser_download_url: f.url },
+    };
+  }
+  return null;
 }
 async function checarAtualizacao({ silencioso = true } = {}) {
   try {
     const achado = await releaseMaisNovaDoPainel();
     if (!achado) {
-      if (!silencioso) $('updStatus').textContent = 'Ainda não há APK do Painel publicado.';
+      if (!silencioso) $('updStatus').textContent = 'Não consegui falar com o servidor agora. Confira a internet.';
       return null;
     }
     const { rel, asset } = achado;
@@ -786,23 +844,18 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     return nova;
   } catch (e) {
     console.warn('[painel-update] ', e.message);
-    if (!silencioso) $('updStatus').textContent = 'Não consegui checar: ' + e.message;
+    if (!silencioso) $('updStatus').textContent = 'Não consegui falar com o servidor agora. Confira a internet.';
     return null;
   }
 }
-// notificacao do Android quando aparece uma versao nova do Painel
+// Aviso de nova versao do Painel NAO cria notificacao local: o servidor
+// manda o push "Atualizacao disponivel!" e o Android mostra na barra.
+// (antes apareciam duas notificacoes iguais)
 function avisarAtualizacao(versao) {
   try {
     if (!versao) return;
-    if (localStorage.getItem(LS_NOTIF_UPDATE) === String(versao)) return;
-    const aviso = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Aviso;
-    if (!aviso) return;
-    aviso.notificar({
-      titulo: '💈 Atualização do Painel',
-      texto: `Versão ${versao} disponível. Toque para abrir e atualizar.`,
-    }).catch(() => {});
     localStorage.setItem(LS_NOTIF_UPDATE, String(versao));
-  } catch { /* sem o plugin, o popup do app continua aparecendo */ }
+  } catch { /* ignora */ }
 }
 function mostrarAtualizacao(versao, notasBrutas, asset, forcar) {
   // tira a tag [FORCAR] do texto que aparece para voce
@@ -810,7 +863,8 @@ function mostrarAtualizacao(versao, notasBrutas, asset, forcar) {
   $('updVersao').textContent = forcar ? `⚠️ Atualização importante: ${versao}` : `Nova versão: ${versao}`;
   $('updAtual').textContent = `Você está na versão ${CONFIG.APP_VERSION}`;
   $('updNotas').innerHTML = notas ? notas.replace(/</g, '&lt;').replace(/\n/g, '<br>') : 'Correções e melhorias nesta versão.';
-  const url = asset ? asset.browser_download_url : 'https://github.com/' + CONFIG.GITHUB_USER + '/' + CONFIG.GITHUB_REPO + '/releases';
+  const url = asset ? asset.browser_download_url
+    : `https://github.com/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/releases/download/v${versao}/${CONFIG.ASSET_PREFIX}-v${versao}.apk`;
   $('btnAtualizar').textContent = '⬇️ Atualizar agora';
   $('btnAtualizar').disabled = false;
   $('btnAtualizar').onclick = () => {
@@ -834,7 +888,16 @@ function baixarEInstalar(url) {
   if (!url) return;
   localStorage.removeItem(LS_ADIA);
   const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
+  const dentroDoApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   if (!nativo) {
+    if (dentroDoApp) {
+      // NUNCA abre navegador de dentro do aplicativo
+      $('updNotas').textContent = 'O instalador interno nao carregou neste aparelho. Instale o APK mais novo uma vez (nao abre o Chrome).';
+      $('btnAtualizar').disabled = false;
+      $('btnAtualizar').textContent = '🔁 Tentar de novo';
+      $('btnAtualizar').onclick = () => baixarEInstalar(url);
+      return;
+    }
     const a = document.createElement('a');
     a.href = url;
     document.body.appendChild(a);
@@ -842,23 +905,60 @@ function baixarEInstalar(url) {
     a.remove();
     return;
   }
-  $('updNotas').textContent = 'Baixando a atualização. Ela será instalada em seguida...';
+  $('updNotas').textContent = 'Baixando a atualização dentro do app...';
   $('btnAtualizar').disabled = true;
   $('btnAtualizar').textContent = '⏳ Baixando...';
   nativo.instalar({ url })
-    .then(() => {
-      $('btnAtualizar').textContent = '📥 Abrir pasta de downloads';
-      $('btnAtualizar').disabled = false;
-      $('btnAtualizar').onclick = () => nativo.abrirDownloads().catch(() => {});
-      $('updNotas').textContent = 'Download iniciado. Se a instalação não abrir sozinha, toque no arquivo na pasta Downloads.';
+    .then((r) => {
+      if (r && r.precisaPermissao) {
+        $('updNotas').textContent = 'Permita "Instalar apps desconhecidos" na tela que abriu e toque em ⬇️ Atualizar agora de novo.';
+        $('btnAtualizar').disabled = false;
+        $('btnAtualizar').textContent = '⬇️ Atualizar agora';
+        return;
+      }
+      // o download continua no próprio aplicativo; quando terminar, o
+      // Android abre sozinho a tela de instalação (sem Chrome)
+      $('updNotas').textContent = 'Baixando a atualização dentro do app...';
     })
     .catch((e) => {
+      // Se o link do GitHub falhou, tenta sozinho o link direto gravado no app.
+      const direto = CONFIG.UPDATE_FALLBACK && CONFIG.UPDATE_FALLBACK.url;
+      if (direto && url !== direto) {
+        $('updNotas').textContent = 'O endereço principal falhou. Tentando outro endereço...';
+        baixarEInstalar(direto);
+        return;
+      }
       $('btnAtualizar').disabled = false;
       $('btnAtualizar').textContent = '⬇️ Atualizar agora';
       $('btnAtualizar').onclick = () => baixarEInstalar(url);
       $('updNotas').textContent = 'Não consegui baixar: ' + (e && e.message ? e.message : 'erro') + '. Tente de novo com a internet ligada.';
     });
 }
+
+// eventos do download nativo: progresso, fim, erro e permissão
+(function ligarEventosDoApkUpdate() {
+  const nativo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkUpdate;
+  if (!nativo || !nativo.addListener) return;
+  const nota = () => $('updNotas');
+  const botao = () => $('btnAtualizar');
+  nativo.addListener('progresso', (d) => {
+    if (nota() && d && d.pct != null) {
+      nota().textContent = `Baixando a atualização dentro do app... ${d.pct}%`;
+    }
+  });
+  nativo.addListener('concluido', () => {
+    if (nota()) nota().textContent = 'Download concluído. Abrindo a instalação do Android...';
+  });
+  nativo.addListener('erro', (d) => {
+    if (nota()) nota().textContent = 'Não consegui baixar: ' + ((d && d.mensagem) || 'erro')
+      + '. Toque em Atualizar agora para tentar de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+  nativo.addListener('permissao', () => {
+    if (nota()) nota().textContent = 'Permita "Instalar apps desconhecidos" para o aplicativo e toque em Atualizar agora de novo.';
+    if (botao()) { botao().disabled = false; botao().textContent = '⬇️ Atualizar agora'; }
+  });
+})();
 $('btnVerificarUpdate').onclick = async () => {
   $('updStatus').textContent = 'Procurando...';
   $('modalCfg').classList.add('hidden');
@@ -948,11 +1048,30 @@ if ($('tPresente')) $('tPresente').onclick = () => ligarNatal('presente', !statu
 // ============================================================
 // ===== NOTIFICACOES PUSH (FCM) =====
 const LS_PUSH_TOKEN = 'barbearia_painel_push_token_v1';
+const LS_APARELHO = 'barbearia_painel_aparelho_id_v1';
+
+// identifica ESTE aparelho: se o token do FCM trocar, o servidor substitui o
+// antigo em vez de guardar os dois (evita a mesma notificacao chegar 2 vezes)
+function idDoAparelho() {
+  try {
+    let id = localStorage.getItem(LS_APARELHO);
+    if (!id) {
+      id = 'pd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+      localStorage.setItem(LS_APARELHO, id);
+    }
+    return id;
+  } catch { return ''; }
+}
 
 // manda o token para o servidor testando todos os enderecos (nuvem, local...)
 async function enviarTokenPushPainel(valor) {
   if (!valor) return false;
-  const corpo = JSON.stringify({ token: valor, app: 'painel', version: CONFIG.APP_VERSION });
+  const corpo = JSON.stringify({
+    token: valor,
+    app: 'painel',
+    version: CONFIG.APP_VERSION,
+    aparelho: idDoAparelho(),
+  });
   const lista = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
   for (const base of lista) {
     try {
@@ -1006,9 +1125,15 @@ async function registrarPushPainel() {
       toast(notification.title || 'Nova notificacao');
     });
     PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-      if (notification.notification.data && notification.notification.data.tipo === 'atualizacao') {
-        checarAtualizacao({ silencioso: false });
+      const dados = (notification.notification && notification.notification.data) || {};
+      if (dados.tipo !== 'atualizacao') return;
+      // o push ja traz o endereco DIRETO do APK do Painel
+      const nova = String(dados.versao || '').replace(/^v/i, '');
+      if (dados.urlPainel && nova && versaoEhMaior(nova, CONFIG.APP_VERSION)) {
+        mostrarAtualizacao(nova, '', { browser_download_url: dados.urlPainel }, false);
+        return;
       }
+      checarAtualizacao({ silencioso: false });
     });
 
     const perm = await PushNotifications.requestPermissions();

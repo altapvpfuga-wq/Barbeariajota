@@ -37,6 +37,12 @@ const cors = require('cors');
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 
+// Arquivos de atualizacao: ficam no proprio servidor (nao dependem do GitHub).
+const VERSAO_FILE = path.join(__dirname, 'versao.json');
+const APK_DIR = path.join(__dirname, 'apk');
+const BASE_PUBLICO = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL
+  || 'https://barbearia-jota-api-2026.onrender.com').replace(/\/+$/, '');
+
 // ---------- Firebase Admin (push notifications) ----------
 // Dois projetos Firebase: um para o cliente, outro para o painel
 let firebaseClienteOk = false;
@@ -790,12 +796,11 @@ app.post('/api/push-atualizacao', async (req, res) => {
   const { pin, versao } = req.body || {};
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
   const v = String(versao || '').trim();
-  const pasta = v ? `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}` : '';
   const dados = {
     tipo: 'atualizacao',
     versao: v,
-    urlCliente: pasta ? `${pasta}/Barbearia-do-Jota-v${v}.apk` : '',
-    urlPainel: pasta ? `${pasta}/Painel-v${v}.apk` : '',
+    urlCliente: `${BASE_PUBLICO}/download/cliente`,
+    urlPainel: `${BASE_PUBLICO}/download/painel`,
   };
   const rCliente = await enviarPush(
     'Atualização do app do cliente!',
@@ -989,6 +994,12 @@ async function releasePeloAtom() {
 }
 
 async function obterUltimaRelease() {
+  // 1) versao.json do proprio servidor: nao depende do GitHub.
+  const local = lerVersaoLocal();
+  if (local.cliente) {
+    return { versao: local.cliente, publicadoEm: local.atualizadoEm || 0, origem: 'versao.json' };
+  }
+  // 2) GitHub (quando estiver liberado)
   try {
     const r = await fetch('https://api.github.com/repos/Surtadoo/barbearia-do-jota/releases/latest', {
       headers: { 'User-Agent': 'barbearia-backend', Accept: 'application/vnd.github+json' },
@@ -1009,8 +1020,56 @@ async function obterUltimaRelease() {
 
 // ============================================================
 //  Link curto para baixar o APK (facilita digitar no celular)
+//  Agora o APK e servido PELO PROPRIO SERVIDOR: nao depende do GitHub.
 // ============================================================
+function lerVersaoLocal() {
+  try {
+    const d = JSON.parse(fs.readFileSync(VERSAO_FILE, 'utf8'));
+    return {
+      cliente: String(d.cliente || d.versao || '').replace(/^v/i, ''),
+      painel: String(d.painel || d.versao || '').replace(/^v/i, ''),
+      notas: String(d.notas || ''),
+      atualizadoEm: fs.statSync(VERSAO_FILE).mtimeMs || 0,
+    };
+  } catch {
+    return { cliente: '', painel: '', notas: '', atualizadoEm: 0 };
+  }
+}
+
+function arquivoApk(nomeApp) {
+  return path.join(APK_DIR, nomeApp === 'painel' ? 'Painel.apk' : 'Barbearia-do-Jota.apk');
+}
+
+function baixarApk(nomeApp, res) {
+  const arq = arquivoApk(nomeApp);
+  if (!fs.existsSync(arq)) {
+    return res.status(404).type('text').send('Esse APK ainda nao foi publicado no servidor.');
+  }
+  res.set('Cache-Control', 'no-store');
+  res.type('application/vnd.android.package-archive');
+  res.sendFile(arq);
+}
+
+// O app pergunta aqui: devolve a versao e o link direto de cada APK.
+app.get('/api/atualizacao', (req, res) => {
+  const v = lerVersaoLocal();
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    cliente: v.cliente
+      ? { versao: v.cliente, url: `${BASE_PUBLICO}/download/cliente`, notas: v.notas }
+      : null,
+    painel: v.painel
+      ? { versao: v.painel, url: `${BASE_PUBLICO}/download/painel`, notas: v.notas }
+      : null,
+  });
+});
+
+app.get('/download/cliente', (req, res) => baixarApk('cliente', res));
+app.get('/download/painel', (req, res) => baixarApk('painel', res));
+
 async function versaoParaDownload() {
+  const local = lerVersaoLocal();
+  if (local.cliente) return local.cliente;
   if (ultimaVersaoNotificada) return ultimaVersaoNotificada;
   try {
     const rel = await obterUltimaRelease();
@@ -1021,6 +1080,7 @@ async function versaoParaDownload() {
 }
 
 app.get('/apk', async (req, res) => {
+  if (fs.existsSync(arquivoApk('cliente'))) return res.redirect(302, '/download/cliente');
   try {
     const v = await versaoParaDownload();
     res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}/Barbearia-do-Jota-v${v}.apk`);
@@ -1030,6 +1090,7 @@ app.get('/apk', async (req, res) => {
 });
 
 app.get('/painel', async (req, res) => {
+  if (fs.existsSync(arquivoApk('painel'))) return res.redirect(302, '/download/painel');
   try {
     const v = await versaoParaDownload();
     res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${v}/Painel-v${v}.apk`);
@@ -1103,16 +1164,14 @@ async function checarAtualizacaoGitHub() {
     ultimaVersaoNotificada = versao;
     try { fs.writeFileSync(ULTIMA_VERSAO_FILE, JSON.stringify({ versao })); } catch { /* ignora */ }
     // envia push notification para todos os apps inscritos.
-    // Vai junto o endereco DIRETO de cada APK: assim o app abre o popup de
-    // atualizacao com o link certo, mesmo se a API do GitHub bloquear.
-    // Cada app recebe a SUA notificacao, com titulo proprio: quem tem os dois
-    // instalados no mesmo celular entende que sao dois apps diferentes.
-    const pasta = `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${versao}`;
+    // Vai junto o endereco DIRETO de cada APK, servido pelo proprio backend:
+    // assim o app abre o popup de atualizacao com o link certo, mesmo se o
+    // GitHub estiver bloqueado.
     const dados = {
       tipo: 'atualizacao',
       versao,
-      urlCliente: `${pasta}/Barbearia-do-Jota-v${versao}.apk`,
-      urlPainel: `${pasta}/Painel-v${versao}.apk`,
+      urlCliente: `${BASE_PUBLICO}/download/cliente`,
+      urlPainel: `${BASE_PUBLICO}/download/painel`,
     };
     const pushCliente = await enviarPush(
       'Atualização do app do cliente!',
