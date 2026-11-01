@@ -5,20 +5,22 @@ const CONFIG = {
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
+  // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
   GITHUB_REPO: 'barbearia-do-jota',
 
   // ATUALIZACAO SEM DEPENDER DO GITHUB
   // O app procura a versao nova nesta ordem:
-  //   1) servidor (Render) -> /api/atualizacao
-  //   2) GitHub (quando estiver disponivel)
-  //   3) este link direto (sempre funciona e NAO abre o Chrome)
-  // Ao publicar uma versao nova, troque a versao e o url abaixo.
+  //   1) arquivo versao.json no Supabase (sempre atualizado, funciona mesmo offline do GitHub/Render)
+  //   2) servidor (Render) -> /api/atualizacao
+  //   3) GitHub (quando estiver disponivel)
+  //   4) este link direto (sempre funciona e NAO abre o Chrome)
+  // Ao publicar uma versao nova, atualize o versao.json no Supabase (basta
+  // sobrescrever o arquivo apk/versao.json) e/ou o APP_VERSION aqui.
+  SUPABASE_FEED_URL: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/versao.json',
   UPDATE_FALLBACK: {
     versao: '1.0.51',
     url: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk',
-    // [FORCAR] faz o aviso aparecer uma vez mesmo em quem ja tem a 1.0.51
-    // (garante que todos peguem esta correcao)
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
 
@@ -658,6 +660,20 @@ function normalizarRelease(obj, nomePadrao) {
   };
 }
 
+// 0) Supabase: arquivo versao.json publico, funciona mesmo com GitHub/Render fora do ar.
+// O usuario so precisa sobrescrever apk/versao.json no Supabase para avisar
+// todos os apps instalados de que existe uma versao nova.
+async function releaseDoSupabase() {
+  if (!CONFIG.SUPABASE_FEED_URL) return null;
+  try {
+    const resp = await fetchComTempo(CONFIG.SUPABASE_FEED_URL, { cache: 'no-store' }, 8000);
+    if (!resp.ok) return null;
+    const dados = await resp.json();
+    const item = dados && (dados.cliente || dados.app);
+    return normalizarRelease(item, 'Barbearia-do-Jota.apk');
+  } catch (e) { return null; }
+}
+
 // 1) Servidor (Render): nao depende do GitHub e responde rapido.
 async function releaseDoServidor() {
   const bases = (typeof servidores === 'function') ? servidores() : (CONFIG.API_BASES || []);
@@ -776,6 +792,10 @@ function fetchComTempo(url, opcoes, ms) {
 }
 
 async function buscarUltimaVersao() {
+  // 0) Supabase (sempre atualizado, funciona mesmo com GitHub/Render fora do ar)
+  const doSupabase = await releaseDoSupabase();
+  if (doSupabase) return doSupabase;
+
   // 1) servidor proprio (nao depende do GitHub)
   const doServidor = await releaseDoServidor();
   if (doServidor) return doServidor;

@@ -22,9 +22,11 @@ const CONFIG = {
 
   // ATUALIZACAO SEM DEPENDER DO GITHUB
   // O painel procura a versao nova nesta ordem:
-  //   1) servidor (Render) -> /api/atualizacao
-  //   2) GitHub (quando estiver disponivel)
-  //   3) este link direto (sempre funciona e NAO abre o Chrome)
+  //   1) arquivo versao.json no Supabase (sempre atualizado)
+  //   2) servidor (Render) -> /api/atualizacao
+  //   3) GitHub (quando estiver disponivel)
+  //   4) este link direto (sempre funciona e NAO abre o Chrome)
+  SUPABASE_FEED_URL: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/versao.json',
   UPDATE_FALLBACK: {
     versao: '1.0.51',
     url: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk',
@@ -737,6 +739,23 @@ function fetchComTempo(url, opcoes, ms) {
 // Antes eu olhava so a release "latest": quando ela tinha apenas o APK do
 // app do cliente, o botao abria a pagina do GitHub e o barbeiro baixava o
 // aplicativo errado. Agora release sem "Painel-vX.X.X.apk" e ignorada.
+// 0) Supabase: arquivo versao.json publico.
+async function releaseDoSupabasePainel() {
+  if (!CONFIG.SUPABASE_FEED_URL) return null;
+  try {
+    const resp = await fetchComTempo(CONFIG.SUPABASE_FEED_URL, { cache: 'no-store' }, 8000);
+    if (!resp.ok) return null;
+    const dados = await resp.json();
+    const item = dados && dados.painel;
+    if (item && item.versao && item.url) {
+      return {
+        rel: { tag_name: 'v' + String(item.versao).replace(/^v/i, ''), body: String(item.notas || '') },
+        asset: { name: 'Painel.apk', browser_download_url: item.url },
+      };
+    }
+  } catch (e) { return null; }
+  return null;
+}
 // 1) Servidor (Render): nao depende do GitHub e responde rapido.
 async function releaseDoServidorPainel() {
   const bases = apiBaseAtual ? [apiBaseAtual, ...servidores()] : servidores();
@@ -776,8 +795,11 @@ async function releasesDoPainel() {
     .filter((x) => x.asset);
 }
 // Devolve a versao mais nova do Painel.
-// 1) servidor (nao depende do GitHub)  2) GitHub  3) link direto do app
+// 0) Supabase  1) servidor  2) GitHub  3) link direto do app
 async function releaseMaisNovaDoPainel() {
+  const doSupabase = await releaseDoSupabasePainel();
+  if (doSupabase) return doSupabase;
+
   const doServidor = await releaseDoServidorPainel();
   if (doServidor) return doServidor;
 

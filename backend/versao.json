@@ -1,7 +1,12 @@
 {
-  "cliente": "1.0.51",
-  "painel": "1.0.51",
-  "urlCliente": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk",
-  "urlPainel": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk",
-  "notas": "Atualização baixada e instalada dentro do próprio app, sem abrir o navegador. Notificações corrigidas."
+  "cliente": {
+    "versao": "1.0.51",
+    "url": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk",
+    "notas": "[FORCAR] Correção da atualização e das notificações."
+  },
+  "painel": {
+    "versao": "1.0.51",
+    "url": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk",
+    "notas": "[FORCAR] Correção da atualização e das notificações."
+  }
 }

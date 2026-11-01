@@ -796,11 +796,14 @@ app.post('/api/push-atualizacao', async (req, res) => {
   const { pin, versao } = req.body || {};
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
   const v = String(versao || '').trim();
+  const local = lerVersaoLocal();
+  const urlCliente = local.urlCliente || `${BASE_PUBLICO}/download/cliente`;
+  const urlPainel = local.urlPainel || `${BASE_PUBLICO}/download/painel`;
   const dados = {
     tipo: 'atualizacao',
-    versao: v,
-    urlCliente: `${BASE_PUBLICO}/download/cliente`,
-    urlPainel: `${BASE_PUBLICO}/download/painel`,
+    versao: v || local.cliente || '',
+    urlCliente,
+    urlPainel,
   };
   const rCliente = await enviarPush(
     'Atualização do app do cliente!',
@@ -1025,14 +1028,24 @@ async function obterUltimaRelease() {
 function lerVersaoLocal() {
   try {
     const d = JSON.parse(fs.readFileSync(VERSAO_FILE, 'utf8'));
+    // aceita tanto { cliente: "1.0.51" } quanto { cliente: { versao, url, notas } }
+    const cliObj = (typeof d.cliente === 'object' && d.cliente) ? d.cliente : null;
+    const panObj = (typeof d.painel === 'object' && d.painel) ? d.painel : null;
+    const cliente = cliObj ? cliObj.versao : d.cliente;
+    const painel = panObj ? panObj.versao : d.painel;
+    const urlCliente = cliObj ? cliObj.url : d.urlCliente;
+    const urlPainel = panObj ? panObj.url : d.urlPainel;
+    const notas = (cliObj && cliObj.notas) || d.notas || '';
     return {
-      cliente: String(d.cliente || d.versao || '').replace(/^v/i, ''),
-      painel: String(d.painel || d.versao || '').replace(/^v/i, ''),
-      notas: String(d.notas || ''),
+      cliente: String(cliente || d.versao || '').replace(/^v/i, ''),
+      painel: String(painel || d.versao || '').replace(/^v/i, ''),
+      notas: String(notas),
+      urlCliente: urlCliente || '',
+      urlPainel: urlPainel || '',
       atualizadoEm: fs.statSync(VERSAO_FILE).mtimeMs || 0,
     };
   } catch {
-    return { cliente: '', painel: '', notas: '', atualizadoEm: 0 };
+    return { cliente: '', painel: '', notas: '', urlCliente: '', urlPainel: '', atualizadoEm: 0 };
   }
 }
 
