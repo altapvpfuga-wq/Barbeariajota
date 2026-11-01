@@ -281,8 +281,8 @@ function racharDia(b) {
 
 function badgePagamento(b) {
   if (b.payMethod === 'pix') {
-    if (b.pixStatus === 'pago') return ['💰 Sinal pago', 'pago'];
-    return ['⏳ Sinal pendente', 'espera'];
+    if (b.pixStatus === 'pago') return ['💰 Pix pago', 'pago'];
+    return ['⏳ Aguardando', 'espera'];
   }
   return ['💵 Pago no local (dinheiro)', 'dinheiro'];
 }
@@ -294,7 +294,7 @@ function cardAg(b) {
   const obs = b.note ? `<small>💬 "${esc(String(b.note).slice(0, 80))}"</small>` : '';
   // para Pix pendente: botao que confere o dinheiro na conta do barbeiro
   const btnPago = (b.payMethod === 'pix' && b.pixStatus !== 'pago')
-    ? `<button class="btn-pago" data-id="${esc(b.id)}">✅ Marcar sinal pago</button>` : '';
+    ? `<button class="btn-pago btn-green" data-id="${esc(b.id)}">✅ Confirmar pagamento</button>` : '';
   // editar e excluir: muda na hora no app/site do cliente
   // IMPORTANTE: as classes btn-editar/btn-apagar TEM que bater com o
   // addEventListener lá embaixo — é o que faz o toque funcionar no APK.
@@ -479,7 +479,7 @@ async function confirmarPixSinal(id) {
   pintarLista();
   publicarCanal({ t: 'p', b: { id, pixStatus: 'pago', status: 'confirmado' } });
   vibrar();
-  toast('✅ Sinal marcado como pago! O cliente já é avisado.');
+  toast('✅ Pix pago! O cliente já é avisado.');
   // se o PC estiver ligado, guarda a confirmacao na central tambem
   try {
     await chamarApi('/api/painel/pago', {
