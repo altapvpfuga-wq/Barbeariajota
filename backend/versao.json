@@ -1,11 +1,11 @@
 {
   "cliente": {
-    "versao": "1.0.55",
+    "versao": "1.0.56",
     "url": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk",
     "notas": "Nova versão com correções e notificações funcionando."
   },
   "painel": {
-    "versao": "1.0.55",
+    "versao": "1.0.56",
     "url": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk",
     "notas": "Nova versão com correções e notificações funcionando."
   }

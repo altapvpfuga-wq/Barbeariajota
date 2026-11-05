@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.55',
+  APP_VERSION: '1.0.56',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -19,7 +19,7 @@ const CONFIG = {
   // sobrescrever o arquivo apk/versao.json) e/ou o APP_VERSION aqui.
   SUPABASE_FEED_URL: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/versao.json',
   UPDATE_FALLBACK: {
-    versao: '1.0.55',
+    versao: '1.0.56',
     url: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },

@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.55',
+  APP_VERSION: '1.0.56',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -28,7 +28,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   SUPABASE_FEED_URL: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/versao.json',
   UPDATE_FALLBACK: {
-    versao: '1.0.55',
+    versao: '1.0.56',
     url: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk',
     // [FORCAR] faz o aviso aparecer uma vez mesmo em quem ja tem a 1.0.51
     // (garante que todos peguem esta correcao)
@@ -243,9 +243,10 @@ function registrar(b, { avisaNovo = true } = {}) {
   salvarLocais(loc);
   if (novo && avisaNovo) {
     vibrar();
-    // NAO criamos notificacao local aqui: o servidor ja manda o push
-    // "Novo agendamento!" e o Android mostra na barra. Antes apareciam duas.
-    toast(`📋 Novo agendamento!\n${b.clientName || ''} — ${b.time || ''} ${b.dateLabel || ''}`);
+    // notificacao mais visivel: toast grande + vibracao
+    toast(`📋 NOVO AGENDAMENTO!\n${b.clientName || ''} — ${b.time || ''} ${b.dateLabel || ''}\nToque para ver.`);
+    // vibracao mais forte (3 pulsos)
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]); } catch { /* ignora */ }
     pintarLista();
   }
   return novo ? 'novo' : 'atualizou';
@@ -452,6 +453,19 @@ function ligarCanal() {
       sse.onerror = () => {
         // um canal pode cair sem o outro cair
         canalOk = sseLista.some((es) => es.readyState === 1);
+        // tenta reconectar em 5 segundos
+        setTimeout(() => {
+          try { sse.close(); } catch { /* ignora */ }
+          const idx = sseLista.indexOf(sse);
+          if (idx >= 0) sseLista.splice(idx, 1);
+          try {
+            const novoSse = new EventSource(`${base}/${CONFIG.NTFY_TOPIC}/sse`);
+            novoSse.onmessage = sse.onmessage;
+            novoSse.onopen = sse.onopen;
+            novoSse.onerror = sse.onerror;
+            sseLista.push(novoSse);
+          } catch { /* ignora */ }
+        }, 5000);
       };
       sse.onmessage = (ev) => {
         let m = null, p = null;
@@ -698,13 +712,13 @@ function toast(msg) {
   if (!t) {
     t = document.createElement('div');
     t.id = 'toastPainel';
-    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--gold);color:#111;font-weight:800;padding:12px 18px;border-radius:12px;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.45);max-width:90vw;text-align:center;white-space:pre-line';
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--gold);color:#111;font-weight:800;padding:16px 24px;border-radius:14px;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.45);max-width:90vw;text-align:center;white-space:pre-line;font-size:16px';
     document.body.appendChild(t);
   }
   t.textContent = msg;
   t.style.display = 'block';
   clearTimeout(timerToast);
-  timerToast = setTimeout(() => { t.style.display = 'none'; }, 4000);
+  timerToast = setTimeout(() => { t.style.display = 'none'; }, 6000);
 }
 
 // correcao de texto com < > "
