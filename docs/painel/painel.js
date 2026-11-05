@@ -13,7 +13,7 @@
 // ============================================================
 
 const CONFIG = {
-  APP_VERSION: '1.0.52',
+  APP_VERSION: '1.0.53',
 
   // Repositório do GitHub onde os APK são publicados.
   GITHUB_USER: 'Surtadoo',
@@ -28,7 +28,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   SUPABASE_FEED_URL: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/versao.json',
   UPDATE_FALLBACK: {
-    versao: '1.0.52',
+    versao: '1.0.53',
     url: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk',
     // [FORCAR] faz o aviso aparecer uma vez mesmo em quem ja tem a 1.0.51
     // (garante que todos peguem esta correcao)
