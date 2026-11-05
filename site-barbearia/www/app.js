@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.53',
+  APP_VERSION: '1.0.54',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -19,7 +19,7 @@ const CONFIG = {
   // sobrescrever o arquivo apk/versao.json) e/ou o APP_VERSION aqui.
   SUPABASE_FEED_URL: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/versao.json',
   UPDATE_FALLBACK: {
-    versao: '1.0.53',
+    versao: '1.0.54',
     url: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -2156,13 +2156,16 @@ $('btnFecharAjustes').onclick = fecharAjustes;
 // repositorio configurado no codigo, nao precisa de botao na tela
 $('btnVerificarUpdate').onclick = async () => {
   $('updStatus').textContent = 'Procurando...';
+  toast('Buscando atualização...');
   // fecha o modal de ajustes e mostra o popup de atualizacao
   $('modalAjustes').classList.add('hidden');
   const achou = await checarAtualizacao({ silencioso: false });
   if (achou) {
     $('updStatus').textContent = `Atualização ${achou} disponível!`;
+    toast(`Atualização ${achou} encontrada!`);
   } else if (document.getElementById('modalUpdate').classList.contains('hidden')) {
     $('updStatus').textContent = `Você está na versão mais recente (${CONFIG.APP_VERSION}).`;
+    toast(`Você já está na versão mais recente (${CONFIG.APP_VERSION}).`);
     // reabre os ajustes para mostrar o resultado
     $('modalAjustes').classList.remove('hidden');
   } else {
