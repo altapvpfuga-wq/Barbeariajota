@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.51',
+  APP_VERSION: '1.0.52',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -19,7 +19,7 @@ const CONFIG = {
   // sobrescrever o arquivo apk/versao.json) e/ou o APP_VERSION aqui.
   SUPABASE_FEED_URL: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/versao.json',
   UPDATE_FALLBACK: {
-    versao: '1.0.51',
+    versao: '1.0.52',
     url: 'https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -836,7 +836,9 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     // Mas SÓ UMA VEZ por versao — quem fechou, nao ve de novo nessa versao.
     const forcar = /\[FORCAR\]|\[FORCE\]/i.test(notas);
 
-    if (forcar) {
+    if (forcar && !silencioso) {
+      // verificacao manual: ignora o "ja viu"
+    } else if (forcar) {
       // ja viu essa versao forcada? (so reaparece se vier OUTRA versao forcada)
       if (localStorage.getItem(LS_UPDATE_VISTO) === nova) return null;
     } else if (!versaoEhMaior(nova, CONFIG.APP_VERSION)) return null;
