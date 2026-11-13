@@ -1,0 +1,12 @@
+{
+  "appId": "com.surtadoo.music",
+  "appName": "Music",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true,
+    "adjustMarginsForEdgeToEdge": "force"
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

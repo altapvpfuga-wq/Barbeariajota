@@ -1,0 +1,15 @@
+{
+  "name": "Music",
+  "short_name": "Music",
+  "description": "Ouça suas músicas favoritas, online ou offline",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030303",
+  "theme_color": "#030303",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
