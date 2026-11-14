@@ -2,7 +2,7 @@
    Music — player de streaming (Audius) com visual YouTube Music
    Catálogo na nuvem • capas reais • busca • download offline
    ============================================================ */
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 const API = 'https://api.audius.co/v1';
 const APP_NAME = 'MusicApp';
 const FALLBACK = Array.isArray(window.FALLBACK_TRACKS) ? window.FALLBACK_TRACKS : [];
@@ -37,7 +37,13 @@ const MOODS = [
   { label: 'Romance', genres: ['R&B/Soul', 'Pop', 'Jazz', 'Acoustic'], grad: 'linear-gradient(135deg,#fd79a8,#a29bfe)' },
 ];
 
-const CHIPS = ['Em alta', 'Pop', 'Funk', 'Gospel', 'Sertanejo', 'Rock', 'Lo-Fi', 'Eletrônico', 'Jazz', 'Relax', 'Hip-Hop', 'Dance'];
+const AUDIUS_GENRES = [
+  'Electronic', 'Hip-Hop/Rap', 'Pop', 'Rock', 'Country', 'Jazz', 'Funk', 'House',
+  'Techno', 'Latin', 'World', 'Folk', 'R&B/Soul', 'Ambient', 'Experimental',
+  'Drum & Bass', 'Dubstep', 'Trap', 'Disco', 'Acoustic', 'Alternative', 'Blues',
+  'Classical', 'Reggae', 'Metal', 'Punk',
+];
+const CHIPS = ['Em alta', 'Sertanejo', 'Pagode', 'Samba', 'Forró', 'Piseiro', 'MPB', 'Rap nacional', 'Funk', 'Gospel', 'Pop', 'Rock', 'Lo-Fi', 'Eletrônico', 'Jazz', 'Relax', 'Hip-Hop', 'Dance'];
 
 const CFG_ITEMS = [
   { id: 'update', icon: 'update', title: 'Atualização do sistema' },
@@ -86,6 +92,10 @@ const state = {
   searchToken: 0,
   searching: false,
   searchShown: 60,
+  mbResults: [],
+  mbLoading: false,
+  mbToken: 0,
+  mbQuery: '',
   libTab: 'playlists',
   settingsSection: null,
   queue: [],
@@ -100,6 +110,9 @@ const state = {
   online: navigator.onLine,
   trendingLoaded: false,
   discoverLoaded: false,
+  brazilLoaded: false,
+  brazilTried: false,
+  brazilLoading: null,
   searchError: '',
   playbackError: false,
   autoSkips: 0,
@@ -143,6 +156,296 @@ const WEB_MEDIA_SESSION = !Native.available;
 const $ = (s, ctx = document) => ctx.querySelector(s);
 const $$ = (s, ctx = document) => [...ctx.querySelectorAll(s)];
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---------- Catálogo brasileiro ----------
+// O Audius tem pouco conteúdo marcado como "Brasil", então combinamos buscas por
+// gêneros/artistas brasileiros com uma lista de uploaders que publicam música BR.
+const CATALOG_CAP = 20000;
+function fold(s) {
+  return String(s == null ? '' : s)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+const BR_GENRE_QUERIES = [
+  { q: 'sertanejo', genre: 'Sertanejo' },
+  { q: 'modão sertanejo', genre: 'Sertanejo' },
+  { q: 'sertanejo sofrência', genre: 'Sertanejo' },
+  { q: 'arrocha', genre: 'Sertanejo' },
+  { q: 'pagode', genre: 'Pagode' },
+  { q: 'pagode baiano', genre: 'Pagode' },
+  { q: 'samba', genre: 'Samba' },
+  { q: 'samba de raiz', genre: 'Samba' },
+  { q: 'forró', genre: 'Forró' },
+  { q: 'forró pé de serra', genre: 'Forró' },
+  { q: 'piseiro', genre: 'Piseiro' },
+  { q: 'pisadinha', genre: 'Piseiro' },
+  { q: 'mpb', genre: 'MPB' },
+  { q: 'bossa nova', genre: 'Bossa Nova' },
+  { q: 'brega funk', genre: 'Brega' },
+  { q: 'brega romântico', genre: 'Brega' },
+  { q: 'rap nacional', genre: 'Rap nacional' },
+  { q: 'trap brasileiro', genre: 'Trap brasileiro' },
+  { q: 'gospel brasileiro', genre: 'Gospel brasileiro' },
+  { q: 'louvor brasileiro', genre: 'Gospel brasileiro' },
+  { q: 'música brasileira', genre: 'MPB' },
+];
+const BR_ARTIST_QUERIES = [
+  { q: 'Jorge e Mateus', genre: 'Sertanejo' },
+  { q: 'Henrique e Juliano', genre: 'Sertanejo' },
+  { q: 'Marília Mendonça', genre: 'Sertanejo' },
+  { q: 'Zé Neto e Cristiano', genre: 'Sertanejo' },
+  { q: 'Gusttavo Lima', genre: 'Sertanejo' },
+  { q: 'Luan Santana', genre: 'Sertanejo' },
+  { q: 'Maiara e Maraisa', genre: 'Sertanejo' },
+  { q: 'Chitãozinho e Xororó', genre: 'Sertanejo' },
+  { q: 'Michel Teló', genre: 'Sertanejo' },
+  { q: 'Wesley Safadão', genre: 'Forró' },
+  { q: 'Xand Avião', genre: 'Forró' },
+  { q: 'João Gomes', genre: 'Piseiro' },
+  { q: 'Ana Castela', genre: 'Piseiro' },
+  { q: 'Péricles', genre: 'Pagode' },
+  { q: 'Thiaguinho', genre: 'Pagode' },
+  { q: 'Ferrugem', genre: 'Pagode' },
+  { q: 'Dilsinho', genre: 'Pagode' },
+  { q: 'Grupo Menos é Mais', genre: 'Pagode' },
+  { q: 'Sorriso Maroto', genre: 'Pagode' },
+  { q: 'Turma do Pagode', genre: 'Pagode' },
+  { q: 'Exaltasamba', genre: 'Pagode' },
+  { q: 'Zeca Pagodinho', genre: 'Samba' },
+  { q: 'Raça Negra', genre: 'Samba' },
+  { q: 'Alcione', genre: 'Samba' },
+  { q: 'Fundo de Quintal', genre: 'Samba' },
+  { q: 'Djavan', genre: 'MPB' },
+  { q: 'Caetano Veloso', genre: 'MPB' },
+  { q: 'Gilberto Gil', genre: 'MPB' },
+  { q: 'Chico Buarque', genre: 'MPB' },
+  { q: 'Gal Costa', genre: 'MPB' },
+  { q: 'Milton Nascimento', genre: 'MPB' },
+  { q: 'Marisa Monte', genre: 'MPB' },
+  { q: 'Elis Regina', genre: 'MPB' },
+  { q: 'MC Hariel', genre: 'Funk brasileiro' },
+  { q: 'MC Ryan SP', genre: 'Funk brasileiro' },
+  { q: 'MC Kevin o Chris', genre: 'Funk brasileiro' },
+  { q: 'MC Cabelinho', genre: 'Funk brasileiro' },
+  { q: 'Racionais MC', genre: 'Rap nacional' },
+  { q: 'Emicida', genre: 'Rap nacional' },
+  { q: 'Djonga', genre: 'Rap nacional' },
+  { q: 'Criolo', genre: 'Rap nacional' },
+  { q: 'Anitta', genre: 'Pop brasileiro' },
+  { q: 'Ludmilla', genre: 'Funk brasileiro' },
+  { q: 'Pabllo Vittar', genre: 'Pop brasileiro' },
+  { q: 'Luísa Sonza', genre: 'Pop brasileiro' },
+  { q: 'Ivete Sangalo', genre: 'Axé' },
+  { q: 'Cláudia Leitte', genre: 'Axé' },
+  { q: 'Charlie Brown Jr', genre: 'Rock nacional' },
+  { q: 'Legião Urbana', genre: 'Rock nacional' },
+  { q: 'Skank', genre: 'Rock nacional' },
+  { q: 'Jota Quest', genre: 'Rock nacional' },
+  { q: 'Titãs', genre: 'Rock nacional' },
+  { q: 'Paralamas do Sucesso', genre: 'Rock nacional' },
+  { q: 'Aline Barros', genre: 'Gospel brasileiro' },
+  { q: 'Fernandinho', genre: 'Gospel brasileiro' },
+  { q: 'Gabriela Rocha', genre: 'Gospel brasileiro' },
+  { q: 'Diante do Trono', genre: 'Gospel brasileiro' },
+];
+BR_ARTIST_QUERIES.push(
+  { q: 'Israel e Rodolffo', genre: 'Sertanejo' },
+  { q: 'Bruno e Marrone', genre: 'Sertanejo' },
+  { q: 'Zezé di Camargo e Luciano', genre: 'Sertanejo' },
+  { q: 'Leonardo', genre: 'Sertanejo' },
+  { q: 'Daniel', genre: 'Sertanejo' },
+  { q: 'Eduardo Costa', genre: 'Sertanejo' },
+  { q: 'César Menotti e Fabiano', genre: 'Sertanejo' },
+  { q: 'Marcos e Belutti', genre: 'Sertanejo' },
+  { q: 'Matheus e Kauan', genre: 'Sertanejo' },
+  { q: 'Zé Felipe', genre: 'Sertanejo' },
+  { q: 'Felipe Araújo', genre: 'Sertanejo' },
+  { q: 'Hugo e Guilherme', genre: 'Sertanejo' },
+  { q: 'Lauana Prado', genre: 'Sertanejo' },
+  { q: 'Naiara Azevedo', genre: 'Sertanejo' },
+  { q: 'Simone e Simaria', genre: 'Sertanejo' },
+  { q: 'Maraisa', genre: 'Sertanejo' },
+  { q: 'Maiara', genre: 'Sertanejo' },
+  { q: 'Diego e Victor Hugo', genre: 'Sertanejo' },
+  { q: 'Guilherme e Benuto', genre: 'Sertanejo' },
+  { q: 'Clayton e Romário', genre: 'Sertanejo' },
+  { q: 'Fernando e Sorocaba', genre: 'Sertanejo' },
+  { q: 'João Neto e Frederico', genre: 'Sertanejo' },
+  { q: 'João Bosco e Vinícius', genre: 'Sertanejo' },
+  { q: 'Rick e Renner', genre: 'Sertanejo' },
+  { q: 'Gian e Giovani', genre: 'Sertanejo' },
+  { q: 'Teodoro e Sampaio', genre: 'Sertanejo' },
+  { q: 'Milionário e José Rico', genre: 'Sertanejo' },
+  { q: 'Chrystian e Ralf', genre: 'Sertanejo' },
+  { q: 'Revelação', genre: 'Pagode' },
+  { q: 'Pixote', genre: 'Pagode' },
+  { q: 'Só Pra Contrariar', genre: 'Pagode' },
+  { q: 'Art Popular', genre: 'Pagode' },
+  { q: 'Molejo', genre: 'Pagode' },
+  { q: 'Negritude Jr', genre: 'Pagode' },
+  { q: 'Katinguelê', genre: 'Pagode' },
+  { q: 'Jeito Moleque', genre: 'Pagode' },
+  { q: 'Imaginasamba', genre: 'Pagode' },
+  { q: 'Bom Gosto', genre: 'Pagode' },
+  { q: 'Tá na Mente', genre: 'Pagode' },
+  { q: 'Grupo Revelação', genre: 'Pagode' },
+  { q: 'Beth Carvalho', genre: 'Samba' },
+  { q: 'Martinho da Vila', genre: 'Samba' },
+  { q: 'Paulinho da Viola', genre: 'Samba' },
+  { q: 'Cartola', genre: 'Samba' },
+  { q: 'Nelson Cavaquinho', genre: 'Samba' },
+  { q: 'Maria Bethânia', genre: 'MPB' },
+  { q: 'Tom Jobim', genre: 'MPB' },
+  { q: 'João Gilberto', genre: 'MPB' },
+  { q: 'Toquinho', genre: 'MPB' },
+  { q: 'Vinicius de Moraes', genre: 'MPB' },
+  { q: 'Jorge Ben Jor', genre: 'MPB' },
+  { q: 'Tim Maia', genre: 'MPB' },
+  { q: 'Seu Jorge', genre: 'MPB' },
+  { q: 'Maria Rita', genre: 'MPB' },
+  { q: 'Vanessa da Mata', genre: 'MPB' },
+  { q: 'Ana Carolina', genre: 'MPB' },
+  { q: 'Zélia Duncan', genre: 'MPB' },
+  { q: 'Lenine', genre: 'MPB' },
+  { q: 'Lô Borges', genre: 'MPB' },
+  { q: 'Beto Guedes', genre: 'MPB' },
+  { q: 'Flávio Venturini', genre: 'MPB' },
+  { q: 'MC Livinho', genre: 'Funk brasileiro' },
+  { q: 'MC WM', genre: 'Funk brasileiro' },
+  { q: 'MC G15', genre: 'Funk brasileiro' },
+  { q: 'MC Kekel', genre: 'Funk brasileiro' },
+  { q: 'MC Don Juan', genre: 'Funk brasileiro' },
+  { q: 'MC Davi', genre: 'Funk brasileiro' },
+  { q: 'MC Pedrinho', genre: 'Funk brasileiro' },
+  { q: 'MC Zaac', genre: 'Funk brasileiro' },
+  { q: 'Jerry Smith', genre: 'Funk brasileiro' },
+  { q: 'Vitão', genre: 'Pop brasileiro' },
+  { q: 'Matuê', genre: 'Trap brasileiro' },
+  { q: 'Teto', genre: 'Trap brasileiro' },
+  { q: 'Wiu', genre: 'Trap brasileiro' },
+  { q: 'Orochi', genre: 'Trap brasileiro' },
+  { q: 'Veigh', genre: 'Trap brasileiro' },
+  { q: 'KayBlack', genre: 'Trap brasileiro' },
+  { q: 'L7NNON', genre: 'Rap nacional' },
+  { q: 'Cazuza', genre: 'Rock nacional' },
+  { q: 'Barão Vermelho', genre: 'Rock nacional' },
+  { q: 'Engenheiros do Hawaii', genre: 'Rock nacional' },
+  { q: 'Raimundos', genre: 'Rock nacional' },
+  { q: 'Pitty', genre: 'Rock nacional' },
+  { q: 'NX Zero', genre: 'Rock nacional' },
+  { q: 'Fresno', genre: 'Rock nacional' },
+  { q: 'Capital Inicial', genre: 'Rock nacional' },
+  { q: 'O Rappa', genre: 'Rock nacional' },
+  { q: 'Natiruts', genre: 'Reggae brasileiro' },
+  { q: 'Aline Barros', genre: 'Gospel brasileiro' },
+  { q: 'Fernandinho', genre: 'Gospel brasileiro' },
+  { q: 'Gabriela Rocha', genre: 'Gospel brasileiro' },
+  { q: 'Diante do Trono', genre: 'Gospel brasileiro' },
+  { q: 'Cassiane', genre: 'Gospel brasileiro' },
+  { q: 'Bruna Karla', genre: 'Gospel brasileiro' },
+  { q: 'Eyshila', genre: 'Gospel brasileiro' },
+  { q: 'André Valadão', genre: 'Gospel brasileiro' },
+  { q: 'Ana Paula Valadão', genre: 'Gospel brasileiro' },
+  { q: 'Ludmila Ferber', genre: 'Gospel brasileiro' },
+  { q: 'Fernanda Brum', genre: 'Gospel brasileiro' },
+  { q: 'Thalles Roberto', genre: 'Gospel brasileiro' },
+  { q: 'Kleber Lucas', genre: 'Gospel brasileiro' },
+  { q: 'Aviões do Forró', genre: 'Forró' },
+  { q: 'Mastruz com Leite', genre: 'Forró' },
+  { q: 'Calcinha Preta', genre: 'Forró' },
+  { q: 'Banda Calypso', genre: 'Forró' },
+  { q: 'Limão com Mel', genre: 'Forró' },
+  { q: 'Cavaleiros do Forró', genre: 'Forró' },
+  { q: 'Saia Rodada', genre: 'Forró' },
+  { q: 'Solange Almeida', genre: 'Forró' },
+  { q: 'Os Barões da Pisadinha', genre: 'Piseiro' },
+  { q: 'Vitor Fernandes', genre: 'Piseiro' },
+  { q: 'Tarcísio do Acordeon', genre: 'Piseiro' },
+  { q: 'Marcynho Sensação', genre: 'Piseiro' },
+  { q: 'Felipe Amorim', genre: 'Piseiro' },
+  { q: 'Daniela Mercury', genre: 'Axé' },
+  { q: 'Carlinhos Brown', genre: 'Axé' },
+  { q: 'Olodum', genre: 'Axé' },
+  { q: 'Timbalada', genre: 'Axé' },
+  { q: 'Chiclete com Banana', genre: 'Axé' },
+  { q: 'Asa de Águia', genre: 'Axé' },
+  { q: 'Netinho', genre: 'Axé' }
+);
+BR_ARTIST_QUERIES.push(
+  { q: 'MC Poze do Rodo', genre: 'Funk brasileiro' },
+  { q: 'Lobo da Madrugada', genre: 'Funk brasileiro' },
+  { q: 'mc poze lobo da madrugada', genre: 'Funk brasileiro' },
+  { q: 'Orochi', genre: 'Trap brasileiro' }
+);
+const BR_UPLOADERS = new Set([
+  'mrunknown', 'gravaerecords', '1000hits', 'boibrasil', 'danixd39', 'danixd42',
+  'danixd43', 'danixd47', 'danixd48', 'danixd51', 'paulorpsa', 'noedi',
+  'hugollobo', 'jhonytorres', 'periclessilva04', 'cyberthebaby', 'vittor louis',
+  'vittor.louis', 'marcosjapasamba', 'sambo', 'lexdj', 'nynno', 'ronnyzinho',
+  'lucasmauricio', 'andrekrun', 'osbardos', '2t da serra', 'vinnyrd7', 'r2gang',
+  'jaum', 'dj bdf', 'dj_bdf', 'ortirodrigo', 'akirathedon', 'eduardokreca',
+  'promubiestudio', 'br4sil', 'eulucke', 'dodecagon music', 'konnoduo',
+  'heziryder', 'eversonespfio', 'zadedouglas', 'rodrigofreitas', 'orafao',
+  'jorgeguberte', 'rggomes', 'djelninolmp', 'dakell4forma', 'jordan',
+  'ribeiro nancy', 'anderson brasil',
+].map(fold).filter(Boolean));
+const BR_MARKERS = [
+  'sertanejo', 'sertaneja', 'modao', 'arrocha', 'sofrimento', 'caipira', 'rodeio',
+  'peao', 'boiadeiro', 'pagode', 'samba', 'forro', 'piseiro', 'pisadinha',
+  'bossa nova', 'brega', 'rap nacional', 'trap brasileiro', 'gospel brasileiro',
+  'mpb', 'baile funk', 'funk carioca', 'favela', 'quebrada', 'baiano',
+  'nordestino', 'vaquejada', 'musica brasileira', 'brasileira', 'brasileiro',
+];
+const BR_PT_WORDS = [
+  'voce', 'nao', 'coracao', 'saudade', 'beijo', 'cerveja', 'boteco', 'paixao',
+  'oracao', 'saudade', 'amor', 'amorzinho', 'mulher', 'homem', 'noite', 'dia',
+  'vida', 'mundo', 'tempo', 'festanca', 'danca', 'crianca', 'rua', 'cidade',
+  'interior', 'roca', 'deus', 'fe', 'alegria', 'tristeza', 'verdade', 'saudades',
+  'modao', 'peao', 'boiadeiro', 'vaqueiro', 'baile', 'quebrada', 'favela',
+];
+function looksBrazilian(t, query) {
+  const hay = fold([t.title, t.artist, t.album, t.genre].join(' '));
+  const handle = fold(t.handle || '');
+  let score = 0;
+  if (handle && BR_UPLOADERS.has(handle)) score += 30;
+  for (const w of BR_MARKERS) if (hay.includes(w)) { score += 12; break; }
+  if (BR_ARTIST_KEYS.some((a) => hay.includes(a))) score += 16;
+  if (/[ãõçâêô]/i.test([t.title, t.artist, t.album].join(' '))) score += 8;
+  const padded = ' ' + hay + ' ';
+  let ptHits = 0;
+  for (const w of BR_PT_WORDS) {
+    if (padded.includes(' ' + w + ' ')) { ptHits++; if (ptHits >= 2) break; }
+  }
+  score += ptHits * 6;
+  const qn = fold(query);
+  if (qn && hay.includes(qn)) score += 6;
+  return score >= 20;
+}
+function brGenreFor(t, curated) {
+  const hay = fold([t.title, t.artist, t.album].join(' '));
+  // Artista conhecido manda mais que a busca que trouxe a faixa.
+  for (const [name, genre] of BR_ARTIST_GENRE) {
+    if (hay.includes(name)) return genre;
+  }
+  if (/sertanejo|sertaneja|modao|arrocha|sofrimento|caipira|rodeio|peao|boiadeiro/.test(hay)) return 'Sertanejo';
+  if (/pagode/.test(hay)) return 'Pagode';
+  if (/samba/.test(hay)) return 'Samba';
+  if (/piseiro|pisadinha/.test(hay)) return 'Piseiro';
+  if (/forro/.test(hay)) return 'Forró';
+  if (/bossa/.test(hay)) return 'Bossa Nova';
+  if (/gospel|louvor|adoracao|oracao/.test(hay)) return 'Gospel brasileiro';
+  if (/trap/.test(hay)) return 'Trap brasileiro';
+  if (/rap|hip hop/.test(hay)) return 'Rap nacional';
+  if (/brega/.test(hay)) return 'Brega';
+  if (/axe/.test(hay)) return 'Axé';
+  if (/funk|baile|favela|quebrada/.test(hay)) return 'Funk brasileiro';
+  return curated || 'Música brasileira';
+}
+
 
 // Ícones Material (mesmos traços usados pelo YouTube Music).
 const ICON_PATHS = {
@@ -245,6 +548,7 @@ function normalizeTracks(list, fallbackGenre) {
       artist: clean(artist, 'Artista'),
       album: clean(t.album || t.genre || fallbackGenre || 'Audius', 'Audius'),
       genre: clean(t.genre || fallbackGenre || 'Música', 'Música'),
+      handle: String((t.user && (t.user.handle || t.user.name)) || t.handle || ''),
       dur: dur || 0,
       art: String(art).replace('150x150', '480x480'),
       fb: t.fb || '',
@@ -258,8 +562,8 @@ function mergeCatalog(list) {
   if (!Array.isArray(list) || !list.length) return;
   const map = new Map(state.catalog.map((t) => [t.id, t]));
   list.forEach((t) => { if (!map.has(t.id)) map.set(t.id, t); });
-  // Mantém o catálogo grande o bastante para trazer músicas antigas e novas.
-  state.catalog = [...map.values()].slice(0, 1500);
+  // Mantém o catálogo grande o bastante para trazer músicas antigas, novas e brasileiras.
+  state.catalog = [...map.values()].slice(0, CATALOG_CAP);
 }
 function trackById(id) {
   id = String(id);
@@ -363,35 +667,149 @@ async function loadDiscover() {
   const endpoints = [
     `/tracks/trending?app_name=${APP_NAME}&limit=100&time=week`,
     `/tracks/trending?app_name=${APP_NAME}&limit=100&time=month`,
-    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&sort_method=recent`,
-    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=100&sort_method=recent`,
-    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=200&sort_method=recent`,
-    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=300&sort_method=recent`,
-    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&sort_method=popular`,
-    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=100&sort_method=popular`,
   ];
+  for (let off = 0; off < 10000; off += 100) {
+    endpoints.push(`/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=${off}&sort_method=recent`);
+  }
+  for (let off = 0; off < 10000; off += 100) {
+    endpoints.push(`/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=${off}&sort_method=popular`);
+  }
+  const BATCH = 6;
   try {
-    const settled = await Promise.allSettled(endpoints.map((p) => apiFetch(p)));
+    for (let i = 0; i < endpoints.length; i += BATCH) {
+      const batch = endpoints.slice(i, i + BATCH);
+      const settled = await Promise.allSettled(batch.map((p) => apiFetch(p)));
+      let list = [];
+      settled.forEach((r) => { if (r.status === 'fulfilled') list = list.concat(normalizeTracks(r.value)); });
+      if (list.length) {
+        mergeCatalog(list);
+        state.trendingLoaded = true;
+        state.discoverLoaded = true;
+        state.online = true;
+        if (state.route === 'inicio' && (i % (BATCH * 2) === 0 || i + BATCH >= endpoints.length)) {
+          const sc = $('#screen-inicio');
+          const top = sc ? sc.scrollTop : 0;
+          renderInicio();
+          if (sc) sc.scrollTop = top;
+        }
+      }
+      await wait(90);
+    }
+    state.online = navigator.onLine;
+    if (state.route === 'inicio') {
+      const sc = $('#screen-inicio');
+      const top = sc ? sc.scrollTop : 0;
+      renderInicio();
+      if (sc) sc.scrollTop = top;
+    }
+  } catch (e) {
+    state.online = navigator.onLine;
+    if (state.route === 'inicio') renderInicio();
+  }
+}
+async function loadBrazil() {
+  if (state.brazilLoaded) return;
+  if (!navigator.onLine) { state.online = false; return; }
+  if (state.brazilLoading) return state.brazilLoading;
+  state.brazilLoading = (async () => {
+    // Intercala gêneros e artistas para que a variedade sobreviva ao limite do catálogo.
+    const tasks = [];
+    const total = Math.max(BR_GENRE_QUERIES.length, BR_ARTIST_QUERIES.length);
+    for (let i = 0; i < total; i++) {
+      if (BR_GENRE_QUERIES[i]) tasks.push(Object.assign({ limit: 30 }, BR_GENRE_QUERIES[i]));
+      if (BR_ARTIST_QUERIES[i]) tasks.push(Object.assign({ limit: 15 }, BR_ARTIST_QUERIES[i]));
+    }
+    const found = new Map();
+    const BATCH = 5;
+    for (let i = 0; i < tasks.length; i += BATCH) {
+      const batch = tasks.slice(i, i + BATCH);
+      const settled = await Promise.allSettled(batch.map((task) => apiFetch(
+        `/tracks/search?query=${encodeURIComponent(task.q)}&app_name=${APP_NAME}&limit=${task.limit}&sort_method=popular`
+      )));
+      settled.forEach((res, j) => {
+        if (res.status !== 'fulfilled') return;
+        const task = batch[j];
+        normalizeTracks(res.value).forEach((t) => {
+          if (found.has(t.id) || !looksBrazilian(t, task.q)) return;
+          t.genre = brGenreFor(t, task.genre);
+          t.br = true;
+          found.set(t.id, t);
+        });
+      });
+      if (i + BATCH < tasks.length) await wait(120);
+    }
+    // Varredura completa dos uploaders brasileiros confiáveis (todas as faixas).
+    for (const handle of BR_UPLOADERS) {
+      let offset = 0;
+      while (offset < 1000) {
+        try {
+          const raw = await apiFetch(
+            `/users/handle/${encodeURIComponent(handle)}/tracks?app_name=${APP_NAME}&limit=100&offset=${offset}`
+          );
+          if (!Array.isArray(raw) || !raw.length) break;
+          normalizeTracks(raw).forEach((t) => {
+            if (found.has(t.id) || !looksBrazilian(t, '')) return;
+            t.genre = brGenreFor(t, 'Música brasileira');
+            t.br = true;
+            found.set(t.id, t);
+          });
+          if (raw.length < 100) break;
+          offset += 100;
+          await wait(80);
+        } catch (e) { break; }
+      }
+      await wait(80);
+    }
+    if (!found.size) return;
+    // Faixas brasileiras entram na frente para não serem cortadas pelo limite do catálogo.
+    const merged = new Map(found);
+    state.catalog.forEach((t) => { if (!merged.has(t.id)) merged.set(t.id, t); });
+    state.catalog = [...merged.values()].slice(0, CATALOG_CAP);
+    state.brazilLoaded = true;
+    state.online = true;
+    if (state.route === 'inicio') {
+      const sc = screenEl('inicio');
+      const top = sc ? sc.scrollTop : 0;
+      renderInicio();
+      if (sc) sc.scrollTop = top;
+    } else if (state.route === 'detalhe' && state.detail && (state.detail.type === 'brazil' || state.detail.key === '__brazil__')) {
+      renderDetalhe();
+    }
+  })();
+  try { await state.brazilLoading; }
+  finally { state.brazilTried = true; state.brazilLoading = null; }
+}
+
+async function loadGenreCatalog() {
+  if (!navigator.onLine) return;
+  const endpoints = [];
+  for (const genre of AUDIUS_GENRES) {
+    for (let off = 0; off < 5000; off += 100) {
+      endpoints.push(`/tracks/search?app_name=${APP_NAME}&limit=100&offset=${off}&sort_method=popular&genre=${encodeURIComponent(genre)}`);
+    }
+  }
+  const BATCH = 8;
+  for (let i = 0; i < endpoints.length; i += BATCH) {
+    const batch = endpoints.slice(i, i + BATCH);
+    const settled = await Promise.allSettled(batch.map((p) => apiFetch(p)));
     let list = [];
     settled.forEach((r) => { if (r.status === 'fulfilled') list = list.concat(normalizeTracks(r.value)); });
     if (list.length) {
       mergeCatalog(list);
-      state.trendingLoaded = true;
-      state.discoverLoaded = true;
-      state.online = true;
-      if (state.route === 'inicio') {
+      if (state.route === 'inicio' && i % (BATCH * 4) === 0) {
         const sc = $('#screen-inicio');
         const top = sc ? sc.scrollTop : 0;
         renderInicio();
         if (sc) sc.scrollTop = top;
       }
-    } else {
-      state.online = navigator.onLine;
-      if (state.route === 'inicio') renderInicio();
     }
-  } catch (e) {
-    state.online = navigator.onLine;
-    if (state.route === 'inicio') renderInicio();
+    await wait(80);
+  }
+  if (state.route === 'inicio') {
+    const sc = $('#screen-inicio');
+    const top = sc ? sc.scrollTop : 0;
+    renderInicio();
+    if (sc) sc.scrollTop = top;
   }
 }
 
@@ -1016,12 +1434,47 @@ function genreGroups() {
     .filter((x) => x.tracks.length >= 2)
     .sort((a, b) => b.tracks.length - a.tracks.length);
 }
+function brazilTracks() {
+  return allTracks().filter((t) => t.br);
+}
+function brazilPicks(n = 14) {
+  const groups = new Map();
+  brazilTracks().forEach((t) => {
+    const g = t.genre || 'Música brasileira';
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(t);
+  });
+  const lists = [...groups.values()].map((list) => list.sort((a, b) => (b.plays || 0) - (a.plays || 0)));
+  lists.sort((a, b) => b.length - a.length);
+  const out = [];
+  for (let i = 0; out.length < n && lists.some((l) => i < l.length); i++) {
+    for (const list of lists) {
+      if (list[i]) out.push(list[i]);
+      if (out.length >= n) break;
+    }
+  }
+  return out;
+}
 function buildPlaylists() {
   const NICE = {
+    'Sertanejo': 'Sertanejo e modão',
+    'Pagode': 'Pagode e samba',
+    'Samba': 'Samba de raiz',
+    'Forró': 'Forró e piseiro',
+    'Piseiro': 'Piseiro e arrocha',
+    'MPB': 'MPB essencial',
+    'Bossa Nova': 'Bossa nova',
+    'Funk brasileiro': 'Funk nacional',
+    'Rap nacional': 'Rap nacional',
+    'Trap brasileiro': 'Trap nacional',
+    'Gospel brasileiro': 'Gospel brasileiro',
+    'Brega': 'Brega e sofrência',
+    'Axé': 'Axé e festa',
+    'Pop brasileiro': 'Pop Brasil',
+    'Rock nacional': 'Rock nacional',
     'Pop': 'Hits do pop nacional',
     'Country': 'Topnejo',
     'Latin': 'Topnejo',
-    'Sertanejo': 'Topnejo',
     'R&B/Soul': 'Gospel & Soul',
     'Funk': 'Funk Sessions',
     'Lo-Fi': 'Lo-Fi para focar',
@@ -1037,7 +1490,11 @@ function buildPlaylists() {
     'Dance': 'Dance Hits',
     'Disco': 'Disco & Groove',
   };
-  const preferred = ['Pop', 'Country', 'Latin', 'Sertanejo', 'R&B/Soul', 'Funk', 'Lo-Fi', 'Electronic', 'House', 'Jazz'];
+  const preferred = [
+    'Sertanejo', 'Pagode', 'Forró', 'Piseiro', 'MPB', 'Funk brasileiro',
+    'Gospel brasileiro', 'Rap nacional', 'Axé', 'Pop brasileiro', 'Rock nacional',
+    'Pop', 'Country', 'Funk', 'Lo-Fi', 'Electronic', 'House', 'Jazz',
+  ];
   const groups = genreGroups().sort((a, b) => {
     const ia = preferred.indexOf(a.genre), ib = preferred.indexOf(b.genre);
     if (ia < 0 && ib < 0) return b.tracks.length - a.tracks.length;
@@ -1052,6 +1509,17 @@ function buildPlaylists() {
     artist: g.tracks[0] ? g.tracks[0].artist : 'Music',
     tracks: g.tracks,
   }));
+  const brAll = brazilTracks().sort((a, b) => (b.plays || 0) - (a.plays || 0));
+  if (brAll.length >= 6) {
+    out.unshift({
+      id: 'pl-br',
+      genre: '__brazil__',
+      name: 'Brasil em alta',
+      artist: 'Sertanejo, pagode, samba e mais',
+      tracks: brAll.slice(0, 80),
+      brazil: true,
+    });
+  }
   if (state.catalog.length >= 6) {
     const picks = [...state.catalog].filter((t, i) => i % 3 === 0).slice(0, 14);
     out.splice(Math.min(3, out.length), 0, {
@@ -1135,10 +1603,25 @@ function renderInicio() {
     .slice(0, 20);
   const allRecent = byRelease.slice(0, 14);
   const chips = CHIPS.map((c, i) => `<div class="chip ${i === 0 ? 'active' : ''}" data-chip="${esc(c)}">${esc(c)}</div>`).join('');
+  const brTracks = brazilTracks();
+  const brPicks = brazilPicks(14);
 
   el.innerHTML = `
     ${!state.online ? '<div class="offline-banner">Sem internet — mostrando o catálogo salvo. Baixe músicas para ouvir offline.</div>' : ''}
     <div class="chips">${chips}</div>
+
+    ${brTracks.length ? `<div class="section br-section">
+      <div class="section-head"><h2 class="section-title">Música brasileira</h2><button class="section-arrow" data-open-type="brazil" data-open-key="Música brasileira">›</button></div>
+      <div class="section-sub">${brTracks.length} faixas · sertanejo, pagode, samba, forró, MPB, piseiro e mais</div>
+      <div class="hscroll">${brPicks.map(hcardTrack).join('')}</div>
+      <button class="btn ghost wide" data-open-type="brazil" data-open-key="Música brasileira">Ver todas as músicas brasileiras</button>
+    </div>` : (!state.brazilLoaded && state.online ? `<div class="section br-section">
+      <div class="section-head"><h2 class="section-title">Música brasileira</h2></div>
+      <div class="section-sub">Carregando sertanejo, pagode, samba, forró, MPB e mais… <span class="spinner mini-spin"></span></div>
+    </div>` : (state.brazilTried && state.online ? `<div class="section br-section">
+      <div class="section-head"><h2 class="section-title">Música brasileira</h2><button class="section-arrow" data-action="reloadBrazil">Tentar de novo</button></div>
+      <div class="section-sub">Não foi possível carregar agora. Toque em tentar de novo.</div>
+    </div>` : ''))}
 
     <div class="section">
       <div class="section-head"><h2 class="section-title">Momentos e Gêneros</h2><button class="section-arrow" data-open-type="all" data-open-key="Momentos">›</button></div>
@@ -1313,10 +1796,17 @@ function renderSearchBody() {
   const shown = Math.max(60, state.searchShown || 60);
   const list = tracks.slice(0, shown);
   const remaining = Math.max(0, tracks.length - list.length);
+  if (q.length >= 2 && state.mbQuery !== q && !state.mbLoading) {
+    state.mbQuery = q; // mark requested
+    // trigger async fetch
+    fetchMusicBrainz(q);
+  }
+  const mbSection = q.length >= 2 ? renderMusicBrainzSection(q) : '';
   el.innerHTML = `${head}
     ${list.length ? `<div class="section"><div class="section-head"><h2 class="section-title">Músicas</h2><span class="section-count">${tracks.length}</span></div>${trackList(list)}
       ${remaining ? `<button class="btn ghost wide" data-search-more>Mostrar mais ${Math.min(60, remaining)} de ${remaining}</button>` : ''}</div>`
-      : (state.searching ? '' : '<div class="empty">Nada encontrado para esta busca.<br>Tente outro nome de música ou artista.</div>')}`;
+      : (state.searching ? '' : '<div class="empty">Nada encontrado para esta busca.<br>Tente outro nome de música ou artista.</div>')}
+    ${mbSection}`;
 }
 async function runSearch(q) {
   if (!q || q.length < 2) return;
@@ -1356,6 +1846,55 @@ async function runSearch(q) {
   }
   state.searching = false;
   if (token === state.searchToken && state.route === 'pesquisar') renderSearchBody();
+}
+
+function renderMusicBrainzSection(q) {
+  const results = state.mbResults || [];
+  const loading = state.mbLoading && state.mbQuery === q;
+  if (loading) {
+    return `<div class="section"><div class="section-head"><h2 class="section-title">MusicBrainz (metadados)</h2></div>
+      <div class="section-sub">Buscando 40M+ registros… <span class="spinner mini-spin"></span></div></div>`;
+  }
+  if (!results.length) {
+    return `<div class="section"><div class="section-head"><h2 class="section-title">MusicBrainz (metadados)</h2></div>
+      <div class="section-sub">Nenhum metadado encontrado (ou busca ainda não concluída).</div></div>`;
+  }
+  return `<div class="section"><div class="section-head"><h2 class="section-title">MusicBrainz (metadados)</h2><span class="section-count">${results.length}</span></div>
+    <div class="section-sub">Metadados de 40M+ gravações. Tocar abre busca externa.</div>
+    ${results.map((r) => `<div class="track" data-mb-open="${esc(r.title + ' ' + r.artist)}">
+      <div class="track-cover cover" style="background:linear-gradient(135deg,#6c5ce7,#a29bfe)"><span class="cover-ph">♪</span></div>
+      <div class="track-info"><div class="track-title">${esc(r.title)}</div><div class="track-artist">${esc(r.artist)}${r.dur ? ' · ' + fmt(r.dur / 1000) : ''}</div></div>
+      <div class="track-dur">›</div>
+    </div>`).join('')}</div>`;
+}
+async function fetchMusicBrainz(q) {
+  const token = ++state.mbToken;
+  state.mbLoading = true;
+  state.mbQuery = q;
+  state.mbResults = [];
+  if (state.route === 'pesquisar') renderSearchBody();
+  // Rate limit MusicBrainz: 1 req/s
+  await wait(1100);
+  if (token !== state.mbToken) { state.mbLoading = false; return; }
+  try {
+    const r = await fetch('https://musicbrainz.org/ws/2/recording/?query=' + encodeURIComponent(q) + '&fmt=json&limit=25');
+    const j = await r.json();
+    if (token !== state.mbToken) { state.mbLoading = false; return; }
+    state.mbResults = (j.recordings || []).map((rec) => ({
+      title: rec.title || 'Faixa',
+      artist: (rec['artist-credit'] || []).map((a) => a.name).join(', ') || 'Artista',
+      dur: rec.length || 0,
+      id: rec.id,
+    }));
+  } catch (e) {
+    state.mbResults = [];
+  }
+  state.mbLoading = false;
+  if (state.route === 'pesquisar' && state.searchQuery.trim() === q) renderSearchBody();
+}
+function openExternalListen(query) {
+  const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
+  try { window.open(url, '_blank'); } catch (e) { location.href = url; }
 }
 
 // ---------- Biblioteca ----------
@@ -1417,6 +1956,7 @@ function detailTracks(d) {
   const all = allTracks();
   if (d.type === 'playlist') {
     if (d.key === '__discover__') return all.filter((t, i) => i % 3 === 0).slice(0, 20);
+    if (d.key === '__brazil__') return all.filter((t) => t.br).sort((a, b) => (b.plays || 0) - (a.plays || 0));
     return all.filter((t) => (t.genre || '').toLowerCase() === d.key.toLowerCase());
   }
   if (d.type === 'genre') {
@@ -1437,6 +1977,7 @@ function detailTracks(d) {
   }
   if (d.type === 'album') return all.filter((t) => (t.album || t.genre) === d.key);
   if (d.type === 'artist') return all.filter((t) => t.artist === d.key);
+  if (d.type === 'brazil') return all.filter((t) => t.br).sort((a, b) => (b.plays || 0) - (a.plays || 0));
   if (d.type === 'recent') return state.recent.map(trackById).filter(Boolean);
   if (d.type === 'all') {
     const k = String(d.key || '').toLowerCase();
@@ -1451,11 +1992,14 @@ function detailTracks(d) {
   return all;
 }
 function openDetail(type, key) {
-  const special = type === 'playlist' && key === '__discover__' ? 'Descobertas da semana' : key;
-  const titles = { playlist: special, genre: key, mood: key, album: key, artist: key, recent: 'Tocadas recentemente', all: key || 'Tudo' };
+  const special = type === 'playlist' && key === '__discover__' ? 'Descobertas da semana'
+    : type === 'playlist' && key === '__brazil__' ? 'Brasil em alta'
+    : key;
+  const titles = { playlist: special, genre: key, mood: key, album: key, artist: key, recent: 'Tocadas recentemente', all: key || 'Tudo', brazil: key || 'Música brasileira' };
   state.navStack.push({ route: state.route, detail: state.detail });
   state.detail = { type, key, title: titles[type] || key || 'Music' };
   state.detailShown = 80;
+  if ((type === 'brazil' || key === '__brazil__') && !brazilTracks().length) loadBrazil();
   showScreen('detalhe');
   const sc = screenEl('detalhe'); if (sc) sc.scrollTop = 0;
   ensureOverlayHistory();
@@ -1871,6 +2415,14 @@ function handleAction(action) {
     loadTrack(state.current, true);
     return;
   }
+  if (action === 'reloadBrazil') {
+    state.brazilLoaded = false;
+    state.brazilTried = false;
+    renderInicio();
+    loadBrazil();
+    toast('Buscando mais música brasileira…');
+    return;
+  }
   if (action === 'allowAll') {
     if (!Native.available) { toast('Permissões disponíveis apenas no APK Android.'); return; }
     const p = state.permissions || {};
@@ -1974,6 +2526,9 @@ document.addEventListener('click', (e) => {
   const action = e.target.closest('[data-action]');
   if (action) { handleAction(action.dataset.action); return; }
 
+  const mbOpen = e.target.closest('[data-mb-open]');
+  if (mbOpen) { openExternalListen(mbOpen.dataset.mbOpen); return; }
+
   const open = e.target.closest('[data-open-type]');
   if (open) { openDetail(open.dataset.openType, open.dataset.openKey); return; }
 
@@ -2061,7 +2616,7 @@ async function init() {
     }
   });
 
-  window.addEventListener('online', () => { state.online = true; toast('Conectado'); loadDiscover(); });
+  window.addEventListener('online', () => { state.online = true; toast('Conectado'); loadDiscover().then(() => loadBrazil()).then(() => loadGenreCatalog()); });
   window.addEventListener('offline', () => { state.online = false; toast('Sem internet'); renderInicio(); });
 
   $('#btnBack').addEventListener('click', triggerUIBack);
@@ -2126,7 +2681,7 @@ async function init() {
     } catch (e) {}
   }
 
-  loadDiscover();
+  loadDiscover().then(() => loadBrazil()).then(() => loadGenreCatalog()).catch(() => loadBrazil());
 }
 
 init();

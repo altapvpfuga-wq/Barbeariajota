@@ -53,6 +53,9 @@ body{font-size:14px}
 .section-sub{font-size:12px;color:var(--muted);margin:-4px 0 10px}
 .section-count{font-size:12px;color:var(--muted);font-weight:600}
 .section-arrow{color:var(--muted);font-size:20px;background:none;border:none;cursor:pointer}
+.br-section{border-radius:12px;padding:12px 10px 10px;margin-left:-2px;margin-right:-2px;background:linear-gradient(135deg,rgba(0,168,89,.14),rgba(255,204,0,.08));border:1px solid rgba(0,168,89,.26)}
+.br-section .section-sub{margin-top:-6px}
+html[data-theme="light"] .br-section{background:linear-gradient(135deg,rgba(0,168,89,.10),rgba(255,204,0,.08));border-color:rgba(0,120,64,.24)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .moment-card{position:relative;border-radius:10px;overflow:hidden;height:64px;display:flex;align-items:center;padding:0 14px;cursor:pointer;font-weight:700;font-size:15px;color:#fff;background-size:cover}
 .moment-card::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.45),transparent 70%)}
