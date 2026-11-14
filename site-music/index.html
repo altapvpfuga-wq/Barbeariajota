@@ -18,7 +18,6 @@
 </head>
 <body>
   <div id="app">
-    <!-- Top bar (varies per screen) -->
     <header class="topbar" id="topbar">
       <div class="topbar-inner">
         <div class="top-left">
@@ -28,26 +27,27 @@
         <div class="top-right" id="topRight"></div>
       </div>
     </header>
-
-    <!-- Screens -->
     <main class="screens" id="screens">
       <section class="screen" id="screen-inicio"></section>
+      <section class="screen" id="screen-pesquisar"></section>
+      <section class="screen" id="screen-biblioteca"></section>
       <section class="screen" id="screen-config"></section>
+      <section class="screen" id="screen-detalhe"></section>
     </main>
-
-    <!-- Bottom nav -->
     <nav class="bottomnav" id="bottomnav">
       <button class="bn-item" data-route="inicio">
         <svg viewBox="0 0 24 24"><path d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z"/></svg>
         <span>Início</span>
       </button>
-      <button class="bn-item" data-route="config">
-        <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 100 8 4 4 0 000-8zm0-6l1.5 2.5L16 3l1 2.8 2.9.3-1.2 2.7 2.3 1.7-2.3 1.7 1.2 2.7-2.9.3-1 2.8-2.5-1.5L12 22l-1.5-2.5L8 21l-1-2.8-2.9-.3 1.2-2.7L3 13.5l2.3-1.7-1.2-2.7 2.9-.3 1-2.8 2.5 1.5L12 2z"/></svg>
-        <span>Config</span>
+      <button class="bn-item" data-route="pesquisar">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Pesquisar</span>
+      </button>
+      <button class="bn-item" data-route="biblioteca">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z"/></svg>
+        <span>Biblioteca</span>
       </button>
     </nav>
-
-    <!-- Mini player -->
     <div class="minip" id="minip" style="display:none">
       <div class="minip-cover" id="minipCover"></div>
       <div class="minip-info">
@@ -58,8 +58,6 @@
       <button class="minip-btn" id="minipPlay" aria-label="Play/Pause">&#9654;</button>
       <button class="minip-btn" id="minipNext" aria-label="Próxima">&#9654;&#9654;</button>
     </div>
-
-    <!-- Full player -->
     <div class="player" id="player" style="display:none">
       <div class="player-head">
         <button class="ico-btn" id="playerClose">&#8595;</button>
@@ -94,11 +92,8 @@
         <div id="queueList"></div>
       </div>
     </div>
-
-    <!-- Toast -->
     <div class="toast" id="toast"></div>
   </div>
-
   <audio id="audioEl" preload="none" crossorigin="anonymous"></audio>
   <script src="app.js"></script>
 </body>
