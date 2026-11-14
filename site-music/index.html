@@ -21,7 +21,7 @@
     <header class="topbar" id="topbar">
       <div class="topbar-inner">
         <div class="top-left">
-          <button class="ico-btn" id="btnBack" style="display:none" aria-label="Voltar">&#8592;</button>
+          <button class="ico-btn" id="btnBack" data-icon="back" style="display:none" aria-label="Voltar"></button>
           <h1 class="top-title" id="topTitle">Início</h1>
         </div>
         <div class="top-right" id="topRight"></div>
@@ -54,23 +54,26 @@
         <div class="minip-title" id="minipTitle"></div>
         <div class="minip-artist" id="minipArtist"></div>
       </div>
-      <button class="minip-btn" id="minipPrev" aria-label="Anterior">&#9664;&#9664;</button>
-      <button class="minip-btn" id="minipPlay" aria-label="Play/Pause">&#9654;</button>
-      <button class="minip-btn" id="minipNext" aria-label="Próxima">&#9654;&#9654;</button>
+      <button class="minip-btn" id="minipPrev" data-icon="prev" aria-label="Anterior"></button>
+      <button class="minip-btn" id="minipPlay" aria-label="Play/Pause"></button>
+      <button class="minip-btn" id="minipNext" data-icon="next" aria-label="Próxima"></button>
       <div class="minip-progress"><div class="minip-fill" id="minipFill"></div></div>
     </div>
     <div class="player" id="player" style="display:none">
+      <div class="player-bg" id="playerBg"></div>
       <div class="player-head">
-        <button class="ico-btn" id="playerClose">&#8595;</button>
+        <button class="ico-btn" id="playerClose" data-icon="down" aria-label="Fechar player"></button>
         <div class="player-head-title" id="playerAlbum"></div>
-        <button class="ico-btn" id="playerMore">&#8942;</button>
+        <button class="ico-btn" id="playerMore" data-icon="more" aria-label="Mais opções"></button>
       </div>
-      <div class="player-cover-wrap">
-        <div class="player-cover" id="playerCover"></div>
-      </div>
-      <div class="player-meta">
-        <div class="player-title" id="playerTitle"></div>
-        <div class="player-artist" id="playerArtist"></div>
+      <div class="player-slide" id="playerSlide">
+        <div class="player-cover-wrap">
+          <div class="player-cover" id="playerCover"></div>
+        </div>
+        <div class="player-meta">
+          <div class="player-title" id="playerTitle"></div>
+          <div class="player-artist" id="playerArtist"></div>
+        </div>
       </div>
       <div class="player-progress">
         <div class="prog-bar" id="progBar"><div class="prog-fill" id="progFill"></div><div class="prog-thumb" id="progThumb"></div></div>
@@ -78,17 +81,17 @@
         <div class="player-error" id="playerError" style="display:none"></div>
       </div>
       <div class="player-controls">
-        <button class="pctrl" id="pShuffle" aria-label="Aleatório">&#128256;</button>
-        <button class="pctrl" id="pPrev" aria-label="Anterior">&#9664;&#9664;</button>
-        <button class="pctrl play" id="pPlay" aria-label="Play/Pause">&#9654;</button>
-        <button class="pctrl" id="pNext" aria-label="Próxima">&#9654;&#9654;</button>
-        <button class="pctrl" id="pRepeat" aria-label="Repetir">&#128257;</button>
+        <button class="pctrl" id="pShuffle" data-icon="shuffle" aria-label="Aleatório"></button>
+        <button class="pctrl" id="pPrev" data-icon="prev" aria-label="Anterior"></button>
+        <button class="pctrl play" id="pPlay" aria-label="Play/Pause"></button>
+        <button class="pctrl" id="pNext" data-icon="next" aria-label="Próxima"></button>
+        <button class="pctrl" id="pRepeat" data-icon="repeat" aria-label="Repetir"></button>
       </div>
       <div class="player-extra">
-        <button class="pextra" id="pLike">&#9825;</button>
-        <button class="pextra" id="pLyrics" title="Letras">🎤</button>
-        <button class="pextra" id="pDownload" title="Baixar">&#11015;</button>
-        <button class="pextra" id="pQueue" title="Fila">&#9776;</button>
+        <button class="pextra" id="pLike" aria-label="Favoritar"></button>
+        <button class="pextra" id="pLyrics" data-icon="lyrics" title="Letras" aria-label="Letras"></button>
+        <button class="pextra" id="pDownload" aria-label="Baixar"></button>
+        <button class="pextra" id="pQueue" data-icon="queue" title="Fila" aria-label="Fila"></button>
       </div>
       <div class="player-queue" id="playerQueue" style="display:none">
         <div class="queue-head">Fila de reprodução</div>
@@ -96,7 +99,7 @@
       </div>
       <div class="lyrics-sheet" id="lyricsSheet" style="display:none">
         <div class="lyrics-head">
-          <button class="ico-btn" id="lyricsClose" aria-label="Fechar letras">&#8595;</button>
+          <button class="ico-btn" id="lyricsClose" data-icon="down" aria-label="Fechar letras"></button>
           <div class="lyrics-head-title">Letras</div>
           <button class="lyrics-ai" id="lyricsTranslate" type="button">Traduzir (IA)</button>
         </div>

@@ -2,7 +2,7 @@
    Music — player de streaming (Audius) com visual YouTube Music
    Catálogo na nuvem • capas reais • busca • download offline
    ============================================================ */
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 const API = 'https://api.audius.co/v1';
 const APP_NAME = 'MusicApp';
 const FALLBACK = Array.isArray(window.FALLBACK_TRACKS) ? window.FALLBACK_TRACKS : [];
@@ -97,6 +97,7 @@ const state = {
   playerOpen: false,
   online: navigator.onLine,
   trendingLoaded: false,
+  discoverLoaded: false,
   searchError: '',
   playbackError: false,
   autoSkips: 0,
@@ -140,6 +141,34 @@ const WEB_MEDIA_SESSION = !Native.available;
 const $ = (s, ctx = document) => ctx.querySelector(s);
 const $$ = (s, ctx = document) => [...ctx.querySelectorAll(s)];
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Ícones Material (mesmos traços usados pelo YouTube Music).
+const ICON_PATHS = {
+  back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
+  down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z',
+  more: 'M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+  play: 'M8 5v14l11-7z',
+  pause: 'M6 19h4V5H6v14zm8-14v14h4V5h-4z',
+  prev: 'M6 6h2v12H6zm3.5 6 8.5 6V6z',
+  next: 'M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z',
+  shuffle: 'M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z',
+  repeat: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
+  heart: 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z',
+  heartOutline: 'M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z',
+  lyrics: 'M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z',
+  download: 'M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z',
+  check: 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  queue: 'M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z',
+  search: 'M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z',
+  clock: 'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
+  people: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
+  settings: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
+  trash: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
+};
+function icon(name, size = 24) {
+  const d = ICON_PATHS[name] || ICON_PATHS.play;
+  return `<svg class="ic" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" focusable="false"><path d="${d}"/></svg>`;
+}
 function toast(msg, ms = 2400) {
   const el = $('#toast'); if (!el) return;
   el.textContent = msg; el.classList.add('show');
@@ -186,8 +215,8 @@ function normalizeTracks(list, fallbackGenre) {
     const dur = Math.round(toSeconds(rawDur));
     if (dur && dur < 20) return null;
     const art = t.art || (t.artwork && (t.artwork['480x480'] || t.artwork['150x150'])) || '';
-    if (!art) return null;
     const artist = t.artist || (t.user && (t.user.name || t.user.handle)) || 'Artista';
+    const released = Date.parse(t.release_date || t.created_at || '') || 0;
     return {
       id: String(t.id),
       title: String(t.title).trim(),
@@ -197,6 +226,8 @@ function normalizeTracks(list, fallbackGenre) {
       dur: dur || 0,
       art: String(art).replace('150x150', '480x480'),
       fb: t.fb || '',
+      released,
+      plays: Number(t.play_count || t.favorite_count || 0) || 0,
     };
   }).filter(Boolean);
 }
@@ -204,7 +235,8 @@ function mergeCatalog(list) {
   if (!Array.isArray(list) || !list.length) return;
   const map = new Map(state.catalog.map((t) => [t.id, t]));
   list.forEach((t) => { if (!map.has(t.id)) map.set(t.id, t); });
-  state.catalog = [...map.values()].slice(0, 240);
+  // Mantém o catálogo grande o bastante para trazer músicas antigas e novas.
+  state.catalog = [...map.values()].slice(0, 600);
 }
 function trackById(id) {
   id = String(id);
@@ -303,14 +335,21 @@ async function apiFetch(path, timeout = 16000) {
   }
   throw lastErr || new Error('network');
 }
-async function loadTrending() {
+async function loadDiscover() {
   if (!navigator.onLine) { state.online = false; return; }
+  const endpoints = [
+    `/tracks/trending?app_name=${APP_NAME}&limit=80&time=week`,
+    `/tracks/trending?app_name=${APP_NAME}&limit=80&time=month`,
+    `/tracks/search?query=&app_name=${APP_NAME}&limit=80&sort_method=recent`,
+  ];
   try {
-    const data = await apiFetch(`/tracks/trending?app_name=${APP_NAME}&limit=60&time=week`);
-    const list = normalizeTracks(data);
+    const settled = await Promise.allSettled(endpoints.map((p) => apiFetch(p)));
+    let list = [];
+    settled.forEach((r) => { if (r.status === 'fulfilled') list = list.concat(normalizeTracks(r.value)); });
     if (list.length) {
       mergeCatalog(list);
       state.trendingLoaded = true;
+      state.discoverLoaded = true;
       state.online = true;
       if (state.route === 'inicio') {
         const sc = $('#screen-inicio');
@@ -318,6 +357,9 @@ async function loadTrending() {
         renderInicio();
         if (sc) sc.scrollTop = top;
       }
+    } else {
+      state.online = navigator.onLine;
+      if (state.route === 'inicio') renderInicio();
     }
   } catch (e) {
     state.online = navigator.onLine;
@@ -609,17 +651,21 @@ function renderPlayerUI() {
 
   const pc = $('#playerCover');
   if (pc) { pc.style.background = grad(t.id); pc.innerHTML = coverInner(t); }
+  const bg = $('#playerBg');
+  if (bg) {
+    const art = artOf(t);
+    bg.style.backgroundImage = art ? `url("${String(art).replace(/"/g, '%22')}")` : grad(t.id);
+    bg.style.backgroundSize = 'cover';
+    bg.style.backgroundPosition = 'center';
+  }
   const pt = $('#playerTitle'), pa = $('#playerArtist'), pal = $('#playerAlbum');
   if (pt) pt.textContent = t.title;
   if (pa) pa.textContent = t.artist;
   if (pal) pal.textContent = t.album || 'Music';
 
-  const glyph = state.loading ? '…' : (state.playing ? '❚❚' : '▶');
   const mplay = $('#minipPlay'), pplay = $('#pPlay');
-  if (mplay) mplay.textContent = glyph;
-  if (pplay) pplay.textContent = glyph;
-
-  if (state.needsGesture && pplay) pplay.textContent = '▶';
+  if (mplay) mplay.innerHTML = icon(state.playing ? 'pause' : 'play', 22);
+  if (pplay) pplay.innerHTML = icon(state.playing ? 'pause' : 'play', 30);
 
   const errEl = $('#playerError');
   if (errEl) {
@@ -639,15 +685,18 @@ function renderPlayerUI() {
   const shuffle = $('#pShuffle'), repeat = $('#pRepeat'), like = $('#pLike'), dl = $('#pDownload');
   if (shuffle) shuffle.classList.toggle('active', state.shuffle);
   if (repeat) repeat.classList.toggle('active', state.repeat !== 'off');
+  if (repeat) repeat.classList.toggle('one', state.repeat === 'one');
   if (like) {
     const on = state.liked.has(t.id);
     like.classList.toggle('active', on);
-    like.textContent = on ? '♥' : '♡';
+    like.innerHTML = icon(on ? 'heart' : 'heartOutline', 24);
+    like.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
   if (dl) {
     const on = state.downloads.has(t.id);
+    const pct = state.downloading.get(t.id);
     dl.classList.toggle('active', on);
-    dl.textContent = state.downloading.has(t.id) ? Math.round((state.downloading.get(t.id) || 0)) + '%' : (on ? '✓' : '⬇');
+    dl.innerHTML = pct != null ? `<span class="dl-pct">${Math.round(pct)}%</span>` : icon(on ? 'check' : 'download', 24);
   }
   updateProgressUI();
 }
@@ -668,17 +717,139 @@ function renderQueueUI() {
 }
 function openPlayer() {
   if (!state.current) { toast('Escolha uma música primeiro.'); return; }
+  if (state.playerOpen) return;
   state.playerOpen = true;
   const p = $('#player');
   if (p) p.style.display = 'flex';
   renderPlayerUI();
   renderQueueUI();
+  ensureOverlayHistory();
 }
 function closePlayer() {
   state.playerOpen = false;
   const p = $('#player');
   if (p) p.style.display = 'none';
   if (window.LyricsUI) window.LyricsUI.close();
+}
+
+// ---------- Voltar (botão e gesto do Android) ----------
+let overlayHistory = false;
+function hasOverlay() {
+  return state.playerOpen || !!state.settingsSection || state.route === 'config' ||
+    (state.route === 'detalhe' && !!state.detail);
+}
+function ensureOverlayHistory() {
+  if (overlayHistory || !hasOverlay()) return;
+  overlayHistory = true;
+  try { history.pushState({ musicOverlay: true }, ''); }
+  catch (e) { overlayHistory = false; }
+}
+function releaseOverlayHistory() {
+  if (!overlayHistory) return;
+  overlayHistory = false;
+  try { history.back(); } catch (e) {}
+}
+function syncOverlayHistory() {
+  if (hasOverlay()) ensureOverlayHistory(); else releaseOverlayHistory();
+}
+function goBackInternal() {
+  if (state.playerOpen) {
+    const sheet = $('#lyricsSheet');
+    if (sheet && sheet.style.display !== 'none' && window.LyricsUI) { window.LyricsUI.close(); return; }
+    closePlayer();
+    return;
+  }
+  if (state.settingsSection) {
+    state.settingsSection = null;
+    renderConfig();
+    updateShell();
+    return;
+  }
+  if (state.route === 'detalhe') {
+    const prev = state.navStack.pop();
+    if (prev) { state.detail = prev.detail; showScreen(prev.route); }
+    else { state.detail = null; state.rootTab = 'inicio'; showScreen('inicio'); }
+    return;
+  }
+  if (state.route === 'config') {
+    state.rootTab = 'inicio';
+    showScreen('inicio');
+  }
+}
+function triggerUIBack() {
+  goBackInternal();
+  syncOverlayHistory();
+}
+window.addEventListener('popstate', () => {
+  if (!hasOverlay()) { overlayHistory = false; return; }
+  overlayHistory = false;
+  goBackInternal();
+  if (hasOverlay()) ensureOverlayHistory();
+});
+
+// ---------- Gestos do player (arrastar para trocar de música) ----------
+function slideTrack(dir) {
+  const slide = $('#playerSlide');
+  if (!slide) return;
+  slide.classList.remove('swipe-next', 'swipe-prev');
+  void slide.offsetWidth;
+  slide.classList.add(dir === 'next' ? 'swipe-next' : 'swipe-prev');
+  setTimeout(() => slide.classList.remove('swipe-next', 'swipe-prev'), 340);
+}
+function initPlayerGestures() {
+  const zone = $('#player');
+  const slide = $('#playerSlide');
+  if (!zone || !slide) return;
+  let startX = 0, startY = 0, active = false, dragging = false;
+
+  const reset = () => {
+    active = false; dragging = false;
+    slide.style.transition = '';
+    slide.style.transform = '';
+    slide.style.opacity = '';
+  };
+  zone.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    if (!e.target.closest('#playerSlide')) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    active = true; dragging = false;
+    slide.style.transition = 'none';
+  }, { passive: true });
+  zone.addEventListener('touchmove', (e) => {
+    if (!active) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (!dragging) {
+      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
+      dragging = true;
+    }
+    if (e.cancelable) e.preventDefault();
+    const clamped = Math.max(-140, Math.min(140, dx));
+    slide.style.transform = 'translateX(' + clamped + 'px)';
+    slide.style.opacity = String(1 - Math.min(0.35, Math.abs(clamped) / 380));
+  }, { passive: false });
+  const finish = (e) => {
+    if (!active) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    const wasDragging = dragging;
+    reset();
+    if (!wasDragging || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    if (dx < 0) { slideTrack('next'); next(); }
+    else { slideTrack('prev'); prev(); }
+  };
+  zone.addEventListener('touchend', finish, { passive: true });
+  zone.addEventListener('touchcancel', reset, { passive: true });
+
+  document.addEventListener('keydown', (e) => {
+    if (!state.playerOpen) return;
+    const tag = (e.target && e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); slideTrack('next'); next(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); slideTrack('prev'); prev(); }
+    else if (e.key === 'Escape') { e.preventDefault(); triggerUIBack(); }
+  });
 }
 
 // ---------- Render helpers ----------
@@ -695,7 +866,7 @@ function trackRow(t, opts = {}) {
       <div class="track-artist">${esc(t.artist)}${genre}${isCurrent ? ' · tocando' : ''}</div>
     </div>
     <div class="track-dur">${fmtDur(t.dur)}</div>
-    ${opts.noDownload ? '' : `<button class="track-more" data-dl="${esc(t.id)}" title="${dl ? 'Baixada' : 'Baixar'}" aria-label="Baixar">${dlPct != null ? Math.round(dlPct) + '%' : (dl ? '✓' : '⬇')}</button>`}
+    ${opts.noDownload ? '' : `<button class="track-more" data-dl="${esc(t.id)}" title="${dl ? 'Baixada' : 'Baixar'}" aria-label="Baixar">${dlPct != null ? `<span class="dl-pct">${Math.round(dlPct)}%</span>` : icon(dl ? 'check' : 'download', 20)}</button>`}
   </div>`;
 }
 function trackList(tracks, opts = {}) {
@@ -704,8 +875,10 @@ function trackList(tracks, opts = {}) {
   return `<div data-qlist="${esc(ids)}">${tracks.map((t) => trackRow(t, opts)).join('')}</div>`;
 }
 function hcardTrack(t) {
+  const isNew = t.released && Date.now() - t.released < 14 * 86400000;
   return `<div class="hcard" data-play="${esc(t.id)}">
     ${coverBox(t, 'hcard-cover')}
+    ${isNew ? '<span class="new-badge">Novo</span>' : ''}
     <div class="hcard-title">${esc(t.title)}</div>
     <div class="hcard-sub">${esc(t.artist)}</div>
   </div>`;
@@ -790,18 +963,21 @@ function updateShell() {
   const title = $('#topTitle');
   if (title) title.textContent = titles[state.route] || '';
   const back = $('#btnBack');
-  if (back) back.style.display = (state.route !== 'inicio' || state.settingsSection) ? 'inline-flex' : 'none';
+  if (back) {
+    const showBack = state.route === 'config' || state.route === 'detalhe';
+    back.style.display = showBack ? 'inline-flex' : 'none';
+  }
   $$('.bn-item').forEach((b) => b.classList.toggle('active', b.dataset.route === state.rootTab));
   const tr = $('#topRight');
   if (tr) {
     if (state.route === 'inicio') {
       tr.innerHTML = `
-        <button class="ico-btn" data-top="recent" title="Tocadas recentemente">🕐</button>
-        <button class="ico-btn" data-top="search" title="Pesquisar">🔍</button>
-        <button class="ico-btn" data-top="together" title="Ouvir juntos">👥</button>
-        <button class="ico-btn" data-top="settings" title="Configurações">⚙️</button>`;
+        <button class="ico-btn" data-top="recent" title="Tocadas recentemente" aria-label="Tocadas recentemente">${icon('clock', 24)}</button>
+        <button class="ico-btn" data-top="search" title="Pesquisar" aria-label="Pesquisar">${icon('search', 24)}</button>
+        <button class="ico-btn" data-top="together" title="Ouvir juntos" aria-label="Ouvir juntos">${icon('people', 24)}</button>
+        <button class="ico-btn" data-top="settings" title="Configurações" aria-label="Configurações">${icon('settings', 24)}</button>`;
     } else if (state.route === 'pesquisar') {
-      tr.innerHTML = `<button class="ico-btn" data-top="settings" title="Configurações">⚙️</button>`;
+      tr.innerHTML = `<button class="ico-btn" data-top="settings" title="Configurações" aria-label="Configurações">${icon('settings', 24)}</button>`;
     } else tr.innerHTML = '';
   }
   // FAB somente no início
@@ -810,7 +986,7 @@ function updateShell() {
     if (!fab) {
       fab = document.createElement('div');
       fab.id = 'fabWrap'; fab.className = 'fab-wrap';
-      fab.innerHTML = `<button class="fab mic" id="fabMic" title="Pesquisar">🔍</button><button class="fab shuffle" id="fabShuffle" title="Rádio aleatório">🔀</button>`;
+      fab.innerHTML = `<button class="fab mic" id="fabMic" title="Pesquisar" aria-label="Pesquisar">${icon('search', 24)}</button><button class="fab shuffle" id="fabShuffle" title="Rádio aleatório" aria-label="Rádio aleatório">${icon('shuffle', 24)}</button>`;
       document.body.appendChild(fab);
       $('#fabMic').addEventListener('click', () => { state.rootTab = 'pesquisar'; showScreen('pesquisar'); });
       $('#fabShuffle').addEventListener('click', () => {
@@ -839,8 +1015,11 @@ function renderInicio() {
   if (!el) return;
   const hasCatalog = state.catalog.length > 0;
   const playlists = buildPlaylists();
-  const launches = state.catalog.slice(0, 8);
-  const recommended = state.catalog.slice(8, 26);
+  const byRelease = [...state.catalog].sort((a, b) => (b.released || 0) - (a.released || 0));
+  const launches = byRelease.slice(0, 10);
+  const recommended = [...state.catalog]
+    .sort((a, b) => (b.plays || 0) - (a.plays || 0))
+    .slice(8, 26);
   const chips = CHIPS.map((c, i) => `<div class="chip ${i === 0 ? 'active' : ''}" data-chip="${esc(c)}">${esc(c)}</div>`).join('');
 
   el.innerHTML = `
@@ -880,7 +1059,7 @@ function renderPesquisar() {
   if (!el) return;
   el.innerHTML = `
     <div class="search-bar">
-      <span class="search-ico">🔍</span>
+      <span class="search-ico">${icon('search', 20)}</span>
       <input class="input search-input" id="searchInput" type="search" placeholder="O que você quer ouvir?" value="${esc(state.searchQuery)}" autocomplete="off" enterkeyhint="search">
       <button class="search-clear" id="searchClear" aria-label="Limpar" style="${state.searchQuery ? '' : 'display:none'}">×</button>
     </div>
@@ -907,27 +1086,40 @@ function renderPesquisar() {
   });
   renderSearchBody();
 }
+function scoreTrack(t, ql) {
+  const title = String(t.title || '').toLowerCase();
+  const artist = String(t.artist || '').toLowerCase();
+  const genre = String(t.genre || '').toLowerCase();
+  const album = String(t.album || '').toLowerCase();
+  const hay = title + ' ' + artist + ' ' + genre + ' ' + album;
+  let score = 0;
+  if (hay.includes(ql)) score += 40;
+  const tokens = ql.split(/\s+/).filter((x) => x.length > 1);
+  if (tokens.length) {
+    const hits = tokens.filter((tok) => hay.includes(tok)).length;
+    score += hits * 8;
+  }
+  if (title === ql) score += 120;
+  else if (title.startsWith(ql)) score += 70;
+  else if (title.includes(ql)) score += 45;
+  if (artist === ql) score += 60;
+  else if (artist.startsWith(ql)) score += 35;
+  else if (artist.includes(ql)) score += 20;
+  if (genre.includes(ql)) score += 8;
+  if (album.includes(ql)) score += 5;
+  return score;
+}
 function rankMatches(list, q) {
   const ql = q.toLowerCase().trim();
-  const scored = [];
   const seen = new Set();
+  const scored = [];
   for (const t of list) {
-    const title = String(t.title || '').toLowerCase();
-    const artist = String(t.artist || '').toLowerCase();
-    const genre = String(t.genre || '').toLowerCase();
-    const album = String(t.album || '').toLowerCase();
-    if (!(title + ' ' + artist + ' ' + genre + ' ' + album).includes(ql)) continue;
-    let score = 0;
-    if (title === ql) score += 120;
-    else if (title.startsWith(ql)) score += 70;
-    else if (title.includes(ql)) score += 45;
-    if (artist === ql) score += 60;
-    else if (artist.startsWith(ql)) score += 35;
-    else if (artist.includes(ql)) score += 20;
-    if (genre.includes(ql)) score += 8;
-    if (album.includes(ql)) score += 5;
-    if (!seen.has(t.id)) { seen.add(t.id); scored.push({ t, score }); }
+    if (!t || seen.has(t.id)) continue;
+    seen.add(t.id);
+    scored.push({ t, score: scoreTrack(t, ql) });
   }
+  // Resultados sem correspondência literal (tags/descrição da nuvem) não somem:
+  // ficam no fim, depois dos matches de título/artista.
   return scored.sort((a, b) => b.score - a.score).map((x) => x.t);
 }
 function renderSearchBody() {
@@ -939,11 +1131,12 @@ function renderSearchBody() {
 
   if (!q) {
     const groups = genreGroups().slice(0, 6);
+    const hot = [...all].sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 10);
     el.innerHTML = `
       ${state.recent.length ? `<div class="section"><div class="section-head"><h2 class="section-title">Tocadas recentemente</h2></div>
         ${trackList(state.recent.map(trackById).filter(Boolean).slice(0, 5), { noDownload: true })}</div>` : ''}
       <div class="section"><div class="section-head"><h2 class="section-title">Em alta agora</h2></div>
-        <div class="hscroll">${all.slice(0, 8).map(hcardTrack).join('') || '<div class="empty">Carregando…</div>'}</div></div>
+        <div class="hscroll">${hot.map(hcardTrack).join('') || '<div class="empty">Carregando…</div>'}</div></div>
       <div class="section"><div class="section-head"><h2 class="section-title">Navegar por gêneros</h2></div>
         <div class="grid2">${MOODS.map((m) => `<div class="moment-card" style="background:${m.grad};height:70px" data-open-type="mood" data-open-key="${esc(m.label)}"><span>${esc(m.label)}</span></div>`).join('')}</div></div>
       <div class="section"><div class="section-head"><h2 class="section-title">Gêneros</h2></div>
@@ -961,7 +1154,7 @@ function renderSearchBody() {
   const head = spinner + errBanner;
 
   if (filter === 'Artistas') {
-    const artists = [...new Set(tracks.map((t) => t.artist))].filter((a) => a.toLowerCase().includes(ql));
+    const artists = [...new Set(tracks.slice(0, 60).map((t) => t.artist))].filter(Boolean);
     el.innerHTML = head + `<div class="section"><div class="section-head"><h2 class="section-title">Artistas</h2></div>
       ${artists.length ? artists.map((a) => {
         const t = tracks.find((x) => x.artist === a);
@@ -973,7 +1166,7 @@ function renderSearchBody() {
     return;
   }
   if (filter === 'Álbuns') {
-    const albums = [...new Set(tracks.map((t) => t.album || t.genre))].filter(Boolean);
+    const albums = [...new Set(tracks.slice(0, 60).map((t) => t.album || t.genre))].filter(Boolean);
     el.innerHTML = head + `<div class="section"><div class="section-head"><h2 class="section-title">Álbuns</h2></div>
       ${albums.length ? albums.map((a) => {
         const t = tracks.find((x) => (x.album || x.genre) === a);
@@ -1006,13 +1199,26 @@ async function runSearch(q) {
   state.searching = true;
   state.searchError = '';
   renderSearchBody();
+  const enc = encodeURIComponent(q);
+  const endpoints = [
+    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=40&sort_method=relevant`,
+    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=40&sort_method=recent`,
+    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=40&sort_method=popular`,
+  ];
   try {
-    const data = await apiFetch(`/tracks/search?query=${encodeURIComponent(q)}&app_name=${APP_NAME}&limit=30`);
+    const settled = await Promise.allSettled(endpoints.map((p) => apiFetch(p)));
     if (token !== state.searchToken) return;
-    const list = normalizeTracks(data);
-    mergeCatalog(list);
-    state.online = true;
-    if (!list.length) state.searchError = '';
+    let list = [];
+    let ok = 0;
+    settled.forEach((r) => {
+      if (r.status === 'fulfilled') { ok++; list = list.concat(normalizeTracks(r.value)); }
+    });
+    if (list.length) mergeCatalog(list);
+    state.online = navigator.onLine;
+    if (!ok) throw new Error('search failed');
+    if (!list.length && !state.catalog.some((t) => scoreTrack(t, q.toLowerCase().trim()) > 0)) {
+      state.searchError = '';
+    }
   } catch (e) {
     if (token === state.searchToken) {
       state.online = navigator.onLine;
@@ -1049,7 +1255,7 @@ function renderBiblioteca() {
       ${list.length ? `<div data-qlist="${esc(list.map((t) => t.id).join('|'))}">${list.map((t) => `<div class="track" data-play="${esc(t.id)}">
         ${coverBox(t, 'track-cover')}
         <div class="track-info"><div class="track-title">${esc(t.title)}</div><div class="track-artist">${esc(t.artist)} · ${mb(t.size || t.blob?.size || 0)}</div></div>
-        <button class="track-more" data-remove="${esc(t.id)}" title="Remover">🗑</button>
+        <button class="track-more" data-remove="${esc(t.id)}" title="Remover" aria-label="Remover">${icon('trash', 20)}</button>
       </div>`).join('')}</div>` : '<div class="empty">Nenhuma música baixada ainda.<br>Toque em ⬇ em uma música para ouvir offline.</div>'}`;
     return;
   }
@@ -1115,6 +1321,7 @@ function openDetail(type, key) {
   state.detail = { type, key, title: titles[type] || key || 'Music' };
   showScreen('detalhe');
   const sc = screenEl('detalhe'); if (sc) sc.scrollTop = 0;
+  ensureOverlayHistory();
 }
 function renderDetalhe() {
   const el = screenEl('detalhe');
@@ -1619,7 +1826,7 @@ document.addEventListener('click', (e) => {
   const top = e.target.closest('[data-top]');
   if (top) {
     const a = top.dataset.top;
-    if (a === 'settings') { state.rootTab = 'inicio'; state.settingsSection = null; showScreen('config'); }
+    if (a === 'settings') { state.rootTab = 'inicio'; state.settingsSection = null; showScreen('config'); ensureOverlayHistory(); }
     else if (a === 'search') { state.rootTab = 'pesquisar'; showScreen('pesquisar'); }
     else if (a === 'recent') openDetail('recent', 'Recentes');
     else if (a === 'together') toast('Ouvir juntos: em breve nesta versão.');
@@ -1631,15 +1838,22 @@ document.addEventListener('click', (e) => {
     state.navStack = []; state.detail = null; state.settingsSection = null;
     state.rootTab = nav.dataset.route;
     showScreen(nav.dataset.route);
+    syncOverlayHistory();
   }
 });
 
 // ---------- Init ----------
 async function init() {
   applyTheme(state.appearance);
+  $$('[data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon, 24); });
+  const pPlayInit = $('#pPlay'); if (pPlayInit) pPlayInit.innerHTML = icon('play', 30);
+  const pLikeInit = $('#pLike'); if (pLikeInit) pLikeInit.innerHTML = icon('heartOutline', 24);
+  const pDlInit = $('#pDownload'); if (pDlInit) pDlInit.innerHTML = icon('download', 24);
+  const miniPlayInit = $('#minipPlay'); if (miniPlayInit) miniPlayInit.innerHTML = icon('play', 22);
   state.catalog = normalizeTracks(FALLBACK);
   await loadDownloads();
   initAudio();
+  initPlayerGestures();
   showScreen('inicio');
   initPermissions();
 
@@ -1660,7 +1874,9 @@ async function init() {
         state.settings.translateLyrics = !!val;
         saveSettings();
         if (state.route === 'config') renderConfig();
+        if (window.LyricsUI) window.LyricsUI.setAuto(!!val);
       },
+      onClose: () => renderPlayerUI(),
     });
   }
 
@@ -1678,23 +1894,17 @@ async function init() {
     }
   });
 
-  window.addEventListener('online', () => { state.online = true; toast('Conectado'); loadTrending(); });
+  window.addEventListener('online', () => { state.online = true; toast('Conectado'); loadDiscover(); });
   window.addEventListener('offline', () => { state.online = false; toast('Sem internet'); renderInicio(); });
 
-  $('#btnBack').addEventListener('click', () => {
-    if (state.playerOpen) { closePlayer(); return; }
-    if (state.settingsSection) { state.settingsSection = null; renderConfig(); updateShell(); return; }
-    const prev = state.navStack.pop();
-    if (prev) { state.detail = prev.detail; showScreen(prev.route); return; }
-    if (state.route !== 'inicio') { state.detail = null; state.rootTab = 'inicio'; showScreen('inicio'); }
-  });
+  $('#btnBack').addEventListener('click', triggerUIBack);
 
   const minip = $('#minip');
   if (minip) minip.addEventListener('click', (e) => { if (e.target.closest('.minip-btn')) return; openPlayer(); });
   $('#minipPlay').addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
   $('#minipPrev').addEventListener('click', (e) => { e.stopPropagation(); prev(); });
   $('#minipNext').addEventListener('click', (e) => { e.stopPropagation(); next(); });
-  $('#playerClose').addEventListener('click', closePlayer);
+  $('#playerClose').addEventListener('click', triggerUIBack);
   $('#pPlay').addEventListener('click', togglePlay);
   $('#pPrev').addEventListener('click', prev);
   $('#pNext').addEventListener('click', next);
@@ -1749,7 +1959,7 @@ async function init() {
     } catch (e) {}
   }
 
-  loadTrending();
+  loadDiscover();
 }
 
 init();

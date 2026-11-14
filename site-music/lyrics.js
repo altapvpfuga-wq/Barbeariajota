@@ -56,7 +56,7 @@
     return blocks;
   }
 
-  let deps = { getTranslate: () => false, toast: () => {}, onTranslateChange: () => {} };
+  let deps = { getTranslate: () => false, toast: () => {}, onTranslateChange: () => {}, onClose: () => {} };
   let track = null;
   let data = null;
   let translation = null;
@@ -84,19 +84,23 @@
     } catch (e) {}
 
     if (!best || (!best.plainLyrics && !best.instrumental)) {
-      try {
-        const u2 = new URL('https://lrclib.net/api/search');
-        u2.searchParams.set('q', (artist + ' ' + title).trim());
-        const r2 = await fetch(u2.toString(), { headers: { Accept: 'application/json' } });
-        if (r2.ok) {
+      const queries = [`${artist} ${title}`.trim(), title];
+      for (const query of queries) {
+        if (!query) continue;
+        try {
+          const u2 = new URL('https://lrclib.net/api/search');
+          u2.searchParams.set('q', query);
+          const r2 = await fetch(u2.toString(), { headers: { Accept: 'application/json' } });
+          if (!r2.ok) continue;
           const arr = await r2.json();
           if (Array.isArray(arr) && arr.length) {
             const usable = arr.filter((x) => x && (x.plainLyrics || x.instrumental));
             usable.sort((a, b) => Math.abs((a.duration || 0) - dur) - Math.abs((b.duration || 0) - dur));
-            best = usable[0] || null;
+            best = usable[0] || best;
+            if (best && best.plainLyrics) break;
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
     }
 
     const out = {
@@ -115,67 +119,154 @@
     const out = [];
     let cur = '';
     for (const line of lines) {
+      if (line.length > max) {
+        if (cur) { out.push(cur); cur = ''; }
+        for (let i = 0; i < line.length; i += max) out.push(line.slice(i, i + max));
+        continue;
+      }
       if (cur && (cur + '\n' + line).length > max) { out.push(cur); cur = line; }
       else cur = cur ? cur + '\n' + line : line;
     }
     if (cur) out.push(cur);
-    return out;
+    return out.length ? out : [''];
   }
   async function googleTranslate(text) {
-    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=pt&dt=t&q=' + encodeURIComponent(text);
-    const r = await fetch(url);
-    if (!r.ok) throw new Error('translate ' + r.status);
+    const urls = [
+      'https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&sl=auto&tl=pt-BR&dt=t&q=',
+      'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=pt-BR&dt=t&q=',
+    ];
+    let last = null;
+    for (const base of urls) {
+      try {
+        const r = await fetch(base + encodeURIComponent(text), { cache: 'no-store' });
+        if (!r.ok) throw new Error('translate ' + r.status);
+        const j = await r.json();
+        let out = '';
+        if (j && Array.isArray(j.sentences)) {
+          out = j.sentences.map((s) => (s && s.trans) || '').join('');
+        } else if (Array.isArray(j) && Array.isArray(j[0])) {
+          out = j[0].map((x) => (Array.isArray(x) ? (x[0] || '') : '')).join('');
+        }
+        if (out && out.trim()) return out;
+        last = new Error('empty translate');
+      } catch (e) { last = e; }
+    }
+    throw last || new Error('translate failed');
+  }
+  async function clients5Translate(text) {
+    const url = 'https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=pt-BR&q=' + encodeURIComponent(text);
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('clients5 ' + r.status);
     const j = await r.json();
-    if (!Array.isArray(j) || !Array.isArray(j[0])) throw new Error('bad translate');
-    return j[0].map((x) => (Array.isArray(x) ? (x[0] || '') : '')).join('');
+    if (Array.isArray(j)) {
+      if (Array.isArray(j[0])) return j[0].join('');
+      if (j.every((x) => typeof x === 'string')) {
+        // Alguns servidores devolvem uma frase por linha.
+        return j.join(text.includes('\n') ? '\n' : '');
+      }
+    }
+    if (j && Array.isArray(j.sentences)) return j.sentences.map((s) => (s && s.trans) || '').join('');
+    if (j && typeof j.translatedText === 'string') return j.translatedText;
+    throw new Error('bad clients5');
   }
   async function myMemoryTranslate(text) {
-    const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=auto|pt-BR';
-    const r = await fetch(url);
-    if (!r.ok) throw new Error('mymemory ' + r.status);
-    const j = await r.json();
-    const out = j && j.responseData && j.responseData.translatedText;
-    if (!out || /MYMEMORY WARNING/i.test(out)) throw new Error('quota');
-    return out;
+    const lines = String(text).split('\n');
+    const out = [];
+    let buf = [];
+    const flush = async () => {
+      if (!buf.length) return;
+      const q = buf.join('\n');
+      buf = [];
+      const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(q) + '&langpair=auto|pt-BR';
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('mymemory ' + r.status);
+      const j = await r.json();
+      const tr = j && j.responseData && j.responseData.translatedText;
+      if (!tr || /MYMEMORY WARNING/i.test(tr)) throw new Error('quota');
+      out.push(tr);
+    };
+    for (const line of lines) {
+      if (buf.length && (buf.join('\n') + '\n' + line).length > 420) await flush();
+      buf.push(line);
+    }
+    await flush();
+    return out.join('\n');
   }
   async function translateText(text) {
-    const chunks = chunkText(text, 1500);
+    const chunks = chunkText(text, 2400);
     const parts = [];
     for (const c of chunks) {
-      try { parts.push(await googleTranslate(c)); }
-      catch (e) {
-        const small = chunkText(c, 420);
-        for (const s of small) parts.push(await myMemoryTranslate(s));
-      }
+      let tr = '';
+      try { tr = await googleTranslate(c); } catch (e) { tr = ''; }
+      if (!tr) { try { tr = await clients5Translate(c); } catch (e) {} }
+      if (!tr) { try { tr = await myMemoryTranslate(c); } catch (e) {} }
+      if (!tr) throw new Error('translation unavailable');
+      parts.push(tr);
     }
     return parts.join('\n');
   }
+
+  let translateError = false;
+  let progress = 0;
+  let total = 0;
+
   async function translateAll() {
-    if (!data || !data.lyrics || !track) return;
-    if (translation) { render(); return; }
-    const key = 'lyr:pt:v3:' + track.id;
+    if (!data || !data.lyrics || !track || translating) return;
+    if (translation && translation.length) { render(); return; }
+    const key = 'lyr:pt:v4:' + track.id;
     const cached = cacheGet(key);
-    if (cached && Array.isArray(cached.blocks)) { translation = cached.blocks; render(); return; }
+    if (cached && Array.isArray(cached.blocks) && cached.blocks.length) {
+      translation = cached.blocks; translateError = false; render(); return;
+    }
 
     translating = true;
-    render();
+    translateError = false;
+    progress = 0;
+    total = 0;
+    render(false);
+
     const blocks = splitBlocks(data.lyrics);
-    const out = [];
+    const fullText = blocks.join('\n\n');
+    const chunks = chunkText(fullText, 2400);
+    total = chunks.length;
+
     try {
-      for (const b of blocks) {
-        let tr = '';
-        if (b.trim()) {
-          try { tr = await translateText(b); } catch (e) { tr = ''; }
-        }
-        out.push(tr);
-        translation = out.slice();
+      const parts = [];
+      for (const c of chunks) {
+        parts.push(await translateText(c));
+        progress++;
         render(false);
-        await sleep(120);
       }
-      translation = out;
-      const ok = out.filter(Boolean).length;
-      if (ok) cacheSet(key, { at: Date.now(), blocks: out });
-      else deps.toast('A tradução não respondeu agora. A letra original continua disponível.');
+      let aligned = parts.join('\n\n')
+        .replace(/\r/g, '')
+        .split(/\n\s*\n+/)
+        .map((b) => b.trim())
+        .filter(Boolean);
+
+      // Se o tradutor juntou ou separou estrofes, alinha bloco a bloco.
+      if (aligned.length !== blocks.length) {
+        aligned = [];
+        for (const b of blocks) {
+          let tr = '';
+          try { tr = await translateText(b); } catch (e) { tr = ''; }
+          aligned.push(tr);
+          translation = aligned.slice();
+          render(false);
+        }
+      }
+
+      translation = aligned;
+      const ok = aligned.filter((x) => x && x.trim()).length;
+      if (ok) {
+        translateError = false;
+        cacheSet(key, { at: Date.now(), blocks: aligned });
+      } else {
+        translateError = true;
+        deps.toast('A tradução não respondeu agora. A letra original continua disponível.');
+      }
+    } catch (e) {
+      translateError = true;
+      deps.toast('Não foi possível traduzir agora. Tente de novo em instantes.');
     } finally {
       translating = false;
       render(false);
@@ -187,7 +278,7 @@
     if (!btn) return;
     if (!data || !data.lyrics) { btn.style.display = 'none'; return; }
     btn.style.display = 'inline-flex';
-    btn.textContent = showTranslated ? 'Ver original' : 'Traduzir (IA)';
+    btn.textContent = translating ? 'Traduzindo…' : (showTranslated ? 'Ver original' : 'Traduzir (IA)');
     btn.classList.toggle('active', showTranslated);
     btn.disabled = translating;
   }
@@ -203,14 +294,33 @@
     if (!data || !data.lyrics) { renderEmpty(); return; }
     const blocks = splitBlocks(data.lyrics);
     const badge = showTranslated ? '<div class="lyrics-ai-badge">✨ Tradução por IA</div>' : '';
-    const status = showTranslated && translating ? '<div class="search-status"><span class="spinner"></span> Traduzindo com IA…</div>' : '';
+    let status = '';
+    if (showTranslated && translating) {
+      const prog = total > 1 ? ` ${Math.min(progress + 1, total)}/${total}` : '';
+      status = `<div class="search-status"><span class="spinner"></span> Traduzindo com IA${prog}…</div>`;
+    }
     const content = blocks.map((b, i) => {
-      const tr = showTranslated && translation && translation[i] ? `<div class="lyr-trans">${esc(translation[i])}</div>` : '';
+      let tr = '';
+      if (showTranslated) {
+        if (translation && translation[i] && translation[i].trim()) {
+          tr = `<div class="lyr-trans">${esc(translation[i])}</div>`;
+        } else if (translating) {
+          tr = '<div class="lyr-trans lyr-pending"><span class="spinner"></span></div>';
+        }
+      }
       return `<p class="lyr-block">${esc(b)}</p>${tr}`;
     }).join('');
-    body.innerHTML = header() + badge + status + content +
+    const error = showTranslated && translateError && !translating
+      ? `<div class="lyrics-tr-error"><span>Não foi possível traduzir tudo agora.</span><button type="button" id="lyricsRetryTr">Tentar de novo</button></div>`
+      : '';
+    body.innerHTML = header() + badge + status + content + error +
       '<div class="lyrics-source">Letra: LRCLIB · Tradução: Google IA</div>';
     updateBtn();
+    const retry = $('#lyricsRetryTr');
+    if (retry) retry.addEventListener('click', () => {
+      try { localStorage.removeItem('lyr:pt:v4:' + track.id); } catch (e) {}
+      translation = null; translateError = false; translateAll();
+    });
     if (resetScroll) body.scrollTop = 0;
   }
   function renderLoading() {
@@ -246,6 +356,9 @@
     data = null;
     translation = null;
     translating = false;
+    translateError = false;
+    progress = 0;
+    total = 0;
     showTranslated = !!deps.getTranslate();
     const sheet = $('#lyricsSheet');
     if (sheet) sheet.style.display = 'flex';
@@ -271,6 +384,7 @@
     translation = null;
     translating = false;
     reqId++;
+    try { deps.onClose(); } catch (e) {}
   }
   function toggle(t) {
     const sheet = $('#lyricsSheet');
