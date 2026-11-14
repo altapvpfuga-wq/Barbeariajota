@@ -2,7 +2,7 @@
    Music — player de streaming (Audius) com visual YouTube Music
    Catálogo na nuvem • capas reais • busca • download offline
    ============================================================ */
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 const API = 'https://api.audius.co/v1';
 const APP_NAME = 'MusicApp';
 const FALLBACK = Array.isArray(window.FALLBACK_TRACKS) ? window.FALLBACK_TRACKS : [];
@@ -40,18 +40,18 @@ const MOODS = [
 const CHIPS = ['Em alta', 'Pop', 'Funk', 'Gospel', 'Sertanejo', 'Rock', 'Lo-Fi', 'Eletrônico', 'Jazz', 'Relax', 'Hip-Hop', 'Dance'];
 
 const CFG_ITEMS = [
-  { id: 'update', icon: '⬇', title: 'Atualização do sistema' },
-  { id: 'aparencia', icon: '🎨', title: 'Aparência' },
-  { id: 'conta', icon: '👤', title: 'Conta' },
-  { id: 'ouvir', icon: '👥', title: 'Ouvir juntos' },
-  { id: 'tocador', icon: '🎧', title: 'Tocador e áudio' },
-  { id: 'conteudo', icon: '🎵', title: 'Conteúdo' },
-  { id: 'traducao', icon: '🌐', title: 'Tradução de letras por IA' },
-  { id: 'permissoes', icon: '🔐', title: 'Permissões do aplicativo' },
-  { id: 'privacidade', icon: '🛡', title: 'Privacidade' },
-  { id: 'armazenamento', icon: '💾', title: 'Armazenamento' },
-  { id: 'backup', icon: '☁', title: 'Backup e restauração' },
-  { id: 'sobre', icon: 'ℹ', title: 'Sobre' },
+  { id: 'update', icon: 'update', title: 'Atualização do sistema' },
+  { id: 'aparencia', icon: 'palette', title: 'Aparência' },
+  { id: 'conta', icon: 'account', title: 'Conta' },
+  { id: 'ouvir', icon: 'people', title: 'Ouvir juntos' },
+  { id: 'tocador', icon: 'headset', title: 'Tocador e áudio' },
+  { id: 'conteudo', icon: 'music', title: 'Conteúdo' },
+  { id: 'traducao', icon: 'translate', title: 'Tradução de letras por IA' },
+  { id: 'permissoes', icon: 'lock', title: 'Permissões do aplicativo' },
+  { id: 'privacidade', icon: 'shield', title: 'Privacidade' },
+  { id: 'armazenamento', icon: 'storage', title: 'Armazenamento' },
+  { id: 'backup', icon: 'cloud', title: 'Backup e restauração' },
+  { id: 'sobre', icon: 'info', title: 'Sobre' },
 ];
 
 // ---------- Estado ----------
@@ -85,6 +85,7 @@ const state = {
   searchFilter: 'Tudo',
   searchToken: 0,
   searching: false,
+  searchShown: 60,
   libTab: 'playlists',
   settingsSection: null,
   queue: [],
@@ -94,6 +95,7 @@ const state = {
   current: null,
   playing: false,
   loading: false,
+  wantPlay: false,
   playerOpen: false,
   online: navigator.onLine,
   trendingLoaded: false,
@@ -164,6 +166,20 @@ const ICON_PATHS = {
   people: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
   settings: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
   trash: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
+  update: 'M21 10.12h-6.78l2.74-2.75c-2.14-2.13-5.61-2.13-7.74 0-2.14 2.13-2.14 5.59 0 7.72 2.13 2.13 5.6 2.13 7.73 0l1.42 1.41c-2.92 2.91-7.65 2.91-10.57 0-2.92-2.91-2.92-7.64 0-10.55 2.92-2.92 7.63-2.93 10.56-.02L21 3.6v6.52z',
+  palette: 'M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z',
+  account: 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
+  headset: 'M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z',
+  music: 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z',
+  translate: 'M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z',
+  lock: 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z',
+  shield: 'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z',
+  storage: 'M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z',
+  cloud: 'M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z',
+  info: 'M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z',
+  bell: 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z',
+  package: 'M20 2H4c-1.1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-.9-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z',
+  battery: 'M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z',
 };
 function icon(name, size = 24) {
   const d = ICON_PATHS[name] || ICON_PATHS.play;
@@ -217,16 +233,23 @@ function normalizeTracks(list, fallbackGenre) {
     const art = t.art || (t.artwork && (t.artwork['480x480'] || t.artwork['150x150'])) || '';
     const artist = t.artist || (t.user && (t.user.name || t.user.handle)) || 'Artista';
     const released = Date.parse(t.release_date || t.created_at || '') || 0;
+    const created = Date.parse(t.created_at || t.release_date || '') || released;
+    // Alguns uploads vêm com títulos/artistas só de pontinhos ("..."): troca por texto legível.
+    const clean = (v, def) => {
+      const s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+      return !s || /^[.\u2026\-–—]+$/.test(s) ? def : s;
+    };
     return {
       id: String(t.id),
-      title: String(t.title).trim(),
-      artist: String(artist).trim(),
-      album: String(t.album || t.genre || fallbackGenre || 'Audius').trim(),
-      genre: String(t.genre || fallbackGenre || 'Música').trim(),
+      title: clean(t.title, 'Faixa sem nome'),
+      artist: clean(artist, 'Artista'),
+      album: clean(t.album || t.genre || fallbackGenre || 'Audius', 'Audius'),
+      genre: clean(t.genre || fallbackGenre || 'Música', 'Música'),
       dur: dur || 0,
       art: String(art).replace('150x150', '480x480'),
       fb: t.fb || '',
       released,
+      created,
       plays: Number(t.play_count || t.favorite_count || 0) || 0,
     };
   }).filter(Boolean);
@@ -236,7 +259,7 @@ function mergeCatalog(list) {
   const map = new Map(state.catalog.map((t) => [t.id, t]));
   list.forEach((t) => { if (!map.has(t.id)) map.set(t.id, t); });
   // Mantém o catálogo grande o bastante para trazer músicas antigas e novas.
-  state.catalog = [...map.values()].slice(0, 600);
+  state.catalog = [...map.values()].slice(0, 1500);
 }
 function trackById(id) {
   id = String(id);
@@ -338,9 +361,14 @@ async function apiFetch(path, timeout = 16000) {
 async function loadDiscover() {
   if (!navigator.onLine) { state.online = false; return; }
   const endpoints = [
-    `/tracks/trending?app_name=${APP_NAME}&limit=80&time=week`,
-    `/tracks/trending?app_name=${APP_NAME}&limit=80&time=month`,
-    `/tracks/search?query=&app_name=${APP_NAME}&limit=80&sort_method=recent`,
+    `/tracks/trending?app_name=${APP_NAME}&limit=100&time=week`,
+    `/tracks/trending?app_name=${APP_NAME}&limit=100&time=month`,
+    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&sort_method=recent`,
+    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=100&sort_method=recent`,
+    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=200&sort_method=recent`,
+    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=300&sort_method=recent`,
+    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&sort_method=popular`,
+    `/tracks/search?query=&app_name=${APP_NAME}&limit=100&offset=100&sort_method=popular`,
   ];
   try {
     const settled = await Promise.allSettled(endpoints.map((p) => apiFetch(p)));
@@ -414,6 +442,7 @@ function initAudio() {
   audio.addEventListener('playing', () => {
     if (!state.current) return;
     state.playing = true; state.loading = false; state.playbackError = false; state.needsGesture = false;
+    state.wantPlay = false;
     state.autoSkips = 0;
     retryCount.delete(state.current.id);
     updateMediaSession(); renderPlayerUI(); refreshPlayingRows(); syncNative(true, false);
@@ -426,7 +455,12 @@ function initAudio() {
   });
   audio.addEventListener('waiting', () => { state.loading = true; renderPlayerUI(); });
   audio.addEventListener('stalled', () => { state.loading = true; renderPlayerUI(); });
-  audio.addEventListener('canplay', () => { state.loading = false; renderPlayerUI(); });
+  audio.addEventListener('canplay', () => {
+    state.loading = false;
+    renderPlayerUI();
+    // Se o primeiro play() foi interrompido pelo WebView, retoma assim que o áudio fica pronto.
+    if (state.wantPlay && audio.paused && !state.playbackError) audio.play().catch(() => {});
+  });
   audio.addEventListener('ended', () => {
     if (state.repeat === 'one') { try { audio.currentTime = 0; audio.play(); } catch (e) {} return; }
     next();
@@ -467,6 +501,7 @@ function onAudioError() {
     return;
   }
   state.playbackError = true;
+  state.wantPlay = false;
   renderPlayerUI();
   updateMediaSession();
   if (state.autoSkips < 2 && state.queue.length > 1) {
@@ -485,6 +520,7 @@ function loadTrack(t, fromUser) {
   state.playing = false;
   state.playbackError = false;
   state.needsGesture = false;
+  state.wantPlay = true;
 
   try { audio.pause(); } catch (e) {}
   audio.src = srcFor(t);
@@ -502,22 +538,23 @@ function loadTrack(t, fromUser) {
   if (p && typeof p.then === 'function') {
     p.then(() => {
       if (token !== playToken) return;
-      state.playing = true; state.loading = false;
+      state.playing = true; state.loading = false; state.wantPlay = false;
       renderPlayerUI(); refreshPlayingRows(); updateMediaSession(); syncNative(true, true);
     }).catch((err) => {
       if (token !== playToken) return;
       state.loading = false;
       state.playing = false;
       if (err && err.name === 'NotAllowedError') {
+        state.wantPlay = false;
         state.needsGesture = true;
-        toast('Toque no ▶ para iniciar a música.');
+        toast('Toque em Reproduzir para iniciar a música.');
       }
       // Em alguns aparelhos o primeiro play() falha enquanto o WebView aquece.
       // Uma segunda tentativa curta resolve na maioria dos casos.
       setTimeout(() => {
         if (token !== playToken || !state.current || state.current.id !== t.id) return;
         if (audio.paused && !state.playbackError) audio.play().catch(() => {});
-      }, 400);
+      }, 120);
       renderPlayerUI();
     });
   }
@@ -544,14 +581,16 @@ function play() {
   if (!state.current) { const first = state.catalog[0] || [...state.downloads.values()][0]; if (first) playTrack(first.id); return; }
   if (!audio.src) { loadTrack(state.current, true); return; }
   if (state.playbackError) { retryCount.delete(state.current.id); loadTrack(state.current, true); return; }
+  state.wantPlay = true;
   const p = audio.play();
   if (p && p.then) {
-    p.then(() => { state.playing = true; state.loading = false; renderPlayerUI(); updateMediaSession(); syncNative(true, false); })
-      .catch(() => { state.playing = false; renderPlayerUI(); toast('Não foi possível retomar. Toque em ▶ novamente.'); });
+    p.then(() => { state.playing = true; state.loading = false; state.wantPlay = false; renderPlayerUI(); updateMediaSession(); syncNative(true, false); })
+      .catch(() => { state.playing = false; state.wantPlay = false; renderPlayerUI(); toast('Não foi possível retomar. Toque em Reproduzir novamente.'); });
   }
 }
 function pause() {
   if (!audio) return;
+  state.wantPlay = false;
   try { audio.pause(); } catch (e) {}
   state.playing = false;
   updateMediaSession();
@@ -559,9 +598,10 @@ function pause() {
   if (state.current) syncNative(false, false);
 }
 function togglePlay() { state.playing ? pause() : play(); }
-function next() {
+function next(force) {
   if (!state.queue.length) return;
-  if (state.repeat === 'one') { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+  // "Repetir uma" vale apenas quando a música termina sozinha.
+  // Botão/swipe sempre avança para a próxima.
   let i = state.queueIndex;
   if (state.shuffle) {
     if (state.queue.length === 1) { playTrack(state.queue[0]); return; }
@@ -576,9 +616,10 @@ function next() {
   state.queueIndex = i;
   playTrack(state.queue[i]);
 }
-function prev() {
+function prev(force) {
   if (!state.queue.length) return;
-  if (audio && audio.currentTime > 4) { audio.currentTime = 0; return; }
+  // Swipe/botão de anterior não reinicia a música: vai direto para a anterior.
+  if (force !== true && audio && audio.currentTime > 4) { audio.currentTime = 0; return; }
   let i = state.queueIndex - 1;
   if (i < 0) i = state.queue.length - 1;
   state.queueIndex = i;
@@ -664,8 +705,12 @@ function renderPlayerUI() {
   if (pal) pal.textContent = t.album || 'Music';
 
   const mplay = $('#minipPlay'), pplay = $('#pPlay');
-  if (mplay) mplay.innerHTML = icon(state.playing ? 'pause' : 'play', 22);
-  if (pplay) pplay.innerHTML = icon(state.playing ? 'pause' : 'play', 30);
+  const isLoading = state.loading && !state.playing;
+  if (mplay) mplay.innerHTML = isLoading ? '<span class="spinner mini-spin"></span>' : icon(state.playing ? 'pause' : 'play', 22);
+  if (pplay) {
+    pplay.innerHTML = isLoading ? '<span class="spinner p-spin"></span>' : icon(state.playing ? 'pause' : 'play', 30);
+    pplay.classList.toggle('loading', isLoading);
+  }
 
   const errEl = $('#playerError');
   if (errEl) {
@@ -711,7 +756,7 @@ function renderQueueUI() {
     return `<div class="track ${state.current && state.current.id === id ? 'playing' : ''}" data-play="${esc(id)}">
       ${coverBox(t, 'track-cover')}
       <div class="track-info"><div class="track-title">${esc(t.title)}</div><div class="track-artist">${esc(t.artist)}</div></div>
-      ${i === state.queueIndex ? '<div class="track-dur">▶</div>' : ''}
+      ${i === state.queueIndex ? `<div class="track-dur">${icon('play', 16)}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -724,6 +769,11 @@ function openPlayer() {
   renderPlayerUI();
   renderQueueUI();
   ensureOverlayHistory();
+  // Dica única: ensina o gesto de arrastar para trocar de música.
+  if (!localStorage.getItem('swipeTipSeen')) {
+    try { localStorage.setItem('swipeTipSeen', '1'); } catch (e) {}
+    setTimeout(() => { if (state.playerOpen) toast('Arraste a capa para o lado para trocar de música', 3600); }, 600);
+  }
 }
 function closePlayer() {
   state.playerOpen = false;
@@ -797,57 +847,119 @@ function slideTrack(dir) {
   setTimeout(() => slide.classList.remove('swipe-next', 'swipe-prev'), 340);
 }
 function initPlayerGestures() {
-  const zone = $('#player');
   const slide = $('#playerSlide');
-  if (!zone || !slide) return;
-  let startX = 0, startY = 0, active = false, dragging = false;
+  const minip = $('#minip');
+  if (!slide) return;
+  const hasPointer = 'PointerEvent' in window;
 
-  const reset = () => {
-    active = false; dragging = false;
-    slide.style.transition = '';
-    slide.style.transform = '';
-    slide.style.opacity = '';
-  };
-  zone.addEventListener('touchstart', (e) => {
-    if (e.touches.length !== 1) return;
-    if (!e.target.closest('#playerSlide')) return;
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    active = true; dragging = false;
-    slide.style.transition = 'none';
-  }, { passive: true });
-  zone.addEventListener('touchmove', (e) => {
-    if (!active) return;
-    const dx = e.touches[0].clientX - startX;
-    const dy = e.touches[0].clientY - startY;
-    if (!dragging) {
-      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
-      dragging = true;
+  // Evita o clique fantasma disparado depois de arrastar (abriria o player).
+  let clickGuardUntil = 0;
+  const suppressNextClick = () => { clickGuardUntil = Date.now() + 420; };
+  document.addEventListener('click', (e) => {
+    if (Date.now() > clickGuardUntil) return;
+    if (!e.target.closest || !e.target.closest('#playerSlide, #minip')) return;
+    clickGuardUntil = 0;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+
+  function bindSwipe(el, opts) {
+    if (!el) return;
+    const ignore = opts.ignore || '';
+    const threshold = opts.threshold || 44;
+    let sx = 0, sy = 0, st = 0, active = false, dragging = false;
+
+    const reset = () => {
+      active = false; dragging = false;
+      el.style.transition = '';
+      el.style.transform = '';
+      el.style.opacity = '';
+    };
+    const begin = (x, y) => {
+      sx = x; sy = y; st = Date.now();
+      active = true; dragging = false;
+      el.style.transition = 'none';
+    };
+    const move = (x, y) => {
+      if (!active) return false;
+      const dx = x - sx, dy = y - sy;
+      if (!dragging) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return false;
+        // Gesto vertical: deixa a tela rolar e cancela o arrasto.
+        if (Math.abs(dy) > Math.abs(dx) * 1.15) { reset(); return false; }
+        dragging = true;
+        el.style.transition = 'none';
+      }
+      const clamped = Math.max(-150, Math.min(150, dx));
+      el.style.transform = 'translateX(' + clamped + 'px)';
+      el.style.opacity = String(1 - Math.min(0.4, Math.abs(clamped) / 360));
+      return true;
+    };
+    const end = (x, y) => {
+      if (!active) return;
+      const dx = x - sx, dy = y - sy;
+      const dt = Math.max(1, Date.now() - st);
+      const wasDragging = dragging;
+      reset();
+      if (!wasDragging) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.2) return;
+      const flick = Math.abs(dx) / dt > 0.45;
+      if (Math.abs(dx) < threshold && !flick) return;
+      suppressNextClick();
+      if (dx < 0) opts.onNext(); else opts.onPrev();
+    };
+
+    if (hasPointer) {
+      el.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (ignore && e.target.closest && e.target.closest(ignore)) return;
+        begin(e.clientX, e.clientY);
+      });
+      window.addEventListener('pointermove', (e) => {
+        if (!active) return;
+        if (move(e.clientX, e.clientY) && e.cancelable) e.preventDefault();
+      }, { passive: false });
+      window.addEventListener('pointerup', (e) => end(e.clientX, e.clientY));
+      window.addEventListener('pointercancel', reset);
+    } else {
+      el.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        if (ignore && e.target.closest && e.target.closest(ignore)) return;
+        begin(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (!active || e.touches.length !== 1) return;
+        if (move(e.touches[0].clientX, e.touches[0].clientY) && e.cancelable) e.preventDefault();
+      }, { passive: false });
+      el.addEventListener('touchend', (e) => {
+        const t = e.changedTouches[0];
+        if (t) end(t.clientX, t.clientY);
+      }, { passive: true });
+      el.addEventListener('touchcancel', reset, { passive: true });
     }
-    if (e.cancelable) e.preventDefault();
-    const clamped = Math.max(-140, Math.min(140, dx));
-    slide.style.transform = 'translateX(' + clamped + 'px)';
-    slide.style.opacity = String(1 - Math.min(0.35, Math.abs(clamped) / 380));
-  }, { passive: false });
-  const finish = (e) => {
-    if (!active) return;
-    const dx = e.changedTouches[0].clientX - startX;
-    const dy = e.changedTouches[0].clientY - startY;
-    const wasDragging = dragging;
-    reset();
-    if (!wasDragging || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
-    if (dx < 0) { slideTrack('next'); next(); }
-    else { slideTrack('prev'); prev(); }
-  };
-  zone.addEventListener('touchend', finish, { passive: true });
-  zone.addEventListener('touchcancel', reset, { passive: true });
+  }
+
+  // Player: arrastar a capa/título para a esquerda = próxima, direita = anterior.
+  bindSwipe(slide, {
+    ignore: 'button, .prog-bar',
+    threshold: 40,
+    onNext: () => { slideTrack('next'); next(true); },
+    onPrev: () => { slideTrack('prev'); prev(true); },
+  });
+  // Mini player: mesmo gesto, direto na barra.
+  bindSwipe(minip, {
+    ignore: '.minip-btn',
+    threshold: 48,
+    onNext: () => { next(true); },
+    onPrev: () => { prev(true); },
+  });
 
   document.addEventListener('keydown', (e) => {
     if (!state.playerOpen) return;
     const tag = (e.target && e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea') return;
-    if (e.key === 'ArrowRight') { e.preventDefault(); slideTrack('next'); next(); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); slideTrack('prev'); prev(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); slideTrack('next'); next(true); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); slideTrack('prev'); prev(true); }
     else if (e.key === 'Escape') { e.preventDefault(); triggerUIBack(); }
   });
 }
@@ -875,7 +987,8 @@ function trackList(tracks, opts = {}) {
   return `<div data-qlist="${esc(ids)}">${tracks.map((t) => trackRow(t, opts)).join('')}</div>`;
 }
 function hcardTrack(t) {
-  const isNew = t.released && Date.now() - t.released < 14 * 86400000;
+  const stamp = t.created || t.released || 0;
+  const isNew = stamp && Date.now() - stamp < 14 * 86400000 && stamp <= Date.now() + 86400000;
   return `<div class="hcard" data-play="${esc(t.id)}">
     ${coverBox(t, 'hcard-cover')}
     ${isNew ? '<span class="new-badge">Novo</span>' : ''}
@@ -1015,11 +1128,12 @@ function renderInicio() {
   if (!el) return;
   const hasCatalog = state.catalog.length > 0;
   const playlists = buildPlaylists();
-  const byRelease = [...state.catalog].sort((a, b) => (b.released || 0) - (a.released || 0));
-  const launches = byRelease.slice(0, 10);
+  const byRelease = [...state.catalog].sort((a, b) => (b.created || b.released || 0) - (a.created || a.released || 0));
+  const launches = byRelease.slice(0, 20);
   const recommended = [...state.catalog]
     .sort((a, b) => (b.plays || 0) - (a.plays || 0))
-    .slice(8, 26);
+    .slice(0, 20);
+  const allRecent = byRelease.slice(0, 14);
   const chips = CHIPS.map((c, i) => `<div class="chip ${i === 0 ? 'active' : ''}" data-chip="${esc(c)}">${esc(c)}</div>`).join('');
 
   el.innerHTML = `
@@ -1048,6 +1162,13 @@ function renderInicio() {
       ${hasCatalog ? trackList(recommended.length ? recommended : state.catalog.slice(0, 12)) : '<div class="empty">Buscando músicas na nuvem…<br><span class="spinner"></span></div>'}
     </div>
 
+    <div class="section">
+      <div class="section-head"><h2 class="section-title">Todas as músicas</h2><button class="section-arrow" data-open-type="all" data-open-key="Todas as músicas">›</button></div>
+      <div class="section-sub">${state.catalog.length} faixas no catálogo · atualizado agora</div>
+      ${hasCatalog ? trackList(allRecent) : '<div class="empty">Carregando catálogo<br><span class="spinner"></span></div>'}
+      ${hasCatalog ? `<button class="btn ghost wide" data-open-type="all" data-open-key="Todas as músicas">Ver as ${state.catalog.length} músicas</button>` : ''}
+    </div>
+
     ${state.recent.length ? `<div class="section">
       <div class="section-head"><h2 class="section-title">Tocadas recentemente</h2><button class="section-arrow" data-open-type="recent" data-open-key="Recentes">›</button></div>
       ${trackList(state.recent.map(trackById).filter(Boolean).slice(0, 5))}
@@ -1071,6 +1192,7 @@ function renderPesquisar() {
   const input = $('#searchInput');
   input.addEventListener('input', () => {
     state.searchQuery = input.value;
+    state.searchShown = 60;
     const clr = $('#searchClear'); if (clr) clr.style.display = input.value ? 'block' : 'none';
     renderSearchBody();
     clearTimeout(searchTimer);
@@ -1081,7 +1203,7 @@ function renderPesquisar() {
     if (e.key === 'Enter') { e.preventDefault(); input.blur(); runSearch(state.searchQuery.trim()); }
   });
   $('#searchClear').addEventListener('click', () => {
-    state.searchQuery = ''; input.value = ''; $('#searchClear').style.display = 'none';
+    state.searchQuery = ''; state.searchShown = 60; input.value = ''; $('#searchClear').style.display = 'none';
     input.focus(); renderSearchBody();
   });
   renderSearchBody();
@@ -1188,9 +1310,12 @@ function renderSearchBody() {
   }
 
   // Tudo / Músicas
-  const list = tracks.slice(0, 40);
+  const shown = Math.max(60, state.searchShown || 60);
+  const list = tracks.slice(0, shown);
+  const remaining = Math.max(0, tracks.length - list.length);
   el.innerHTML = `${head}
-    ${list.length ? `<div class="section"><div class="section-head"><h2 class="section-title">Músicas</h2><span class="section-count">${tracks.length}</span></div>${trackList(list)}</div>`
+    ${list.length ? `<div class="section"><div class="section-head"><h2 class="section-title">Músicas</h2><span class="section-count">${tracks.length}</span></div>${trackList(list)}
+      ${remaining ? `<button class="btn ghost wide" data-search-more>Mostrar mais ${Math.min(60, remaining)} de ${remaining}</button>` : ''}</div>`
       : (state.searching ? '' : '<div class="empty">Nada encontrado para esta busca.<br>Tente outro nome de música ou artista.</div>')}`;
 }
 async function runSearch(q) {
@@ -1198,12 +1323,14 @@ async function runSearch(q) {
   const token = ++state.searchToken;
   state.searching = true;
   state.searchError = '';
+  state.searchShown = 60;
   renderSearchBody();
   const enc = encodeURIComponent(q);
   const endpoints = [
-    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=40&sort_method=relevant`,
-    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=40&sort_method=recent`,
-    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=40&sort_method=popular`,
+    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=100&sort_method=relevant`,
+    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=100&sort_method=recent`,
+    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=100&offset=100&sort_method=recent`,
+    `/tracks/search?query=${enc}&app_name=${APP_NAME}&limit=100&sort_method=popular`,
   ];
   try {
     const settled = await Promise.allSettled(endpoints.map((p) => apiFetch(p)));
@@ -1256,14 +1383,14 @@ function renderBiblioteca() {
         ${coverBox(t, 'track-cover')}
         <div class="track-info"><div class="track-title">${esc(t.title)}</div><div class="track-artist">${esc(t.artist)} · ${mb(t.size || t.blob?.size || 0)}</div></div>
         <button class="track-more" data-remove="${esc(t.id)}" title="Remover" aria-label="Remover">${icon('trash', 20)}</button>
-      </div>`).join('')}</div>` : '<div class="empty">Nenhuma música baixada ainda.<br>Toque em ⬇ em uma música para ouvir offline.</div>'}`;
+      </div>`).join('')}</div>` : '<div class="empty">Nenhuma música baixada ainda.<br>Toque no botão de baixar em uma música para ouvir offline.</div>'}`;
     return;
   }
   if (state.libTab === 'favoritos') {
     const list = [...state.liked].map(trackById).filter(Boolean);
     content.innerHTML = list.length
       ? `<div data-qlist="${esc(list.map((t) => t.id).join('|'))}">${list.map((t) => trackRow(t)).join('')}</div>`
-      : '<div class="empty">Nenhuma música favorita ainda.<br>Toque no ♡ no player para favoritar.</div>';
+      : '<div class="empty">Nenhuma música favorita ainda.<br>Toque no coração no player para favoritar.</div>';
     return;
   }
   if (state.libTab === 'artistas') {
@@ -1311,17 +1438,40 @@ function detailTracks(d) {
   if (d.type === 'album') return all.filter((t) => (t.album || t.genre) === d.key);
   if (d.type === 'artist') return all.filter((t) => t.artist === d.key);
   if (d.type === 'recent') return state.recent.map(trackById).filter(Boolean);
-  if (d.type === 'all') return all.slice(0, 60);
-  return all.slice(0, 30);
+  if (d.type === 'all') {
+    const k = String(d.key || '').toLowerCase();
+    if (k.includes('lan') || k.includes('novidade') || k.includes('toda')) {
+      return [...all].sort((a, b) => (b.created || b.released || 0) - (a.created || a.released || 0));
+    }
+    if (k.includes('recomend') || k.includes('alta') || k.includes('momento')) {
+      return [...all].sort((a, b) => (b.plays || 0) - (a.plays || 0));
+    }
+    return all;
+  }
+  return all;
 }
 function openDetail(type, key) {
   const special = type === 'playlist' && key === '__discover__' ? 'Descobertas da semana' : key;
   const titles = { playlist: special, genre: key, mood: key, album: key, artist: key, recent: 'Tocadas recentemente', all: key || 'Tudo' };
   state.navStack.push({ route: state.route, detail: state.detail });
   state.detail = { type, key, title: titles[type] || key || 'Music' };
+  state.detailShown = 80;
   showScreen('detalhe');
   const sc = screenEl('detalhe'); if (sc) sc.scrollTop = 0;
   ensureOverlayHistory();
+}
+function detailVisible(tracks) {
+  const shown = Math.max(80, state.detailShown || 80);
+  return tracks.slice(0, shown);
+}
+function renderDetailList(tracks) {
+  const host = $('#detailList');
+  if (!host) return;
+  const list = detailVisible(tracks);
+  const remaining = Math.max(0, tracks.length - list.length);
+  host.innerHTML = trackList(list) + (remaining
+    ? `<button class="btn ghost wide" data-detail-more>Mostrar mais ${Math.min(80, remaining)} de ${remaining}</button>`
+    : '');
 }
 function renderDetalhe() {
   const el = screenEl('detalhe');
@@ -1337,12 +1487,13 @@ function renderDetalhe() {
       <div class="hero-title">${esc(d.title)}</div>
       <div class="hero-sub">${esc(subtitle)}</div>
       <div class="play-all">
-        <button class="btn" id="playAll">▶ Tocar tudo</button>
-        <button class="btn ghost" id="shuffleAll">🔀 Aleatório</button>
+        <button class="btn" id="playAll">${icon('play', 18)} Tocar tudo</button>
+        <button class="btn ghost" id="shuffleAll">${icon('shuffle', 18)} Aleatório</button>
       </div>
     </div>
-    <div id="detailList">${trackList(tracks)}</div>
+    <div id="detailList"></div>
   `;
+  renderDetailList(tracks);
   const ids = tracks.map((t) => t.id);
   const playAll = $('#playAll');
   if (playAll) playAll.addEventListener('click', () => { if (!ids.length) return; state.shuffle = false; state.queue = ids; playTrack(ids[0], ids); });
@@ -1387,7 +1538,7 @@ function renderConfig() {
   if (state.settingsSection) { renderConfigDetail(el); return; }
   el.innerHTML = `<div class="cfg-list">${CFG_ITEMS.map((c) => `
     <div class="cfg-item" data-cfg="${c.id}">
-      <div class="cfg-icon">${c.icon}</div>
+      <div class="cfg-icon">${icon(c.icon, 22)}</div>
       <div class="cfg-text"><div class="cfg-title">${c.title}</div><div class="cfg-sub ${c.id === 'update' ? 'cfg-update' : ''}">${esc(cfgSub(c.id))}</div></div>
       <div class="cfg-arrow">›</div>
     </div>`).join('')}</div>`;
@@ -1412,7 +1563,7 @@ function renderConfigDetail(el) {
       <p class="cfg-sub" style="margin-top:12px">O tema claro usa cores mais suaves para ambientes iluminados.</p></div>`;
   } else if (id === 'conta') {
     body = `<div class="card account-card">
-      <div class="avatar">🎧</div>
+      <div class="avatar">${icon('headset', 30)}</div>
       <div class="card-title">Você não está conectado</div>
       <p class="cfg-sub">Ouça músicas e baixe para offline sem precisar de conta. O catálogo vem da nuvem (Audius).</p>
       <button class="btn" style="margin-top:12px" data-action="signIn">Entrar</button>
@@ -1449,13 +1600,13 @@ function renderConfigDetail(el) {
       ${list.length ? list.map((t) => `<div class="track" data-play="${esc(t.id)}">
         ${coverBox(t, 'track-cover')}
         <div class="track-info"><div class="track-title">${esc(t.title)}</div><div class="track-artist">${esc(t.artist)} · ${mb(t.size || t.blob?.size || 0)}</div></div>
-        <button class="track-more" data-remove="${esc(t.id)}">🗑</button></div>`).join('') : '<div class="empty">Nenhum download.</div>'}`;
+        <button class="track-more" data-remove="${esc(t.id)}" aria-label="Remover">${icon('trash', 20)}</button></div>`).join('') : '<div class="empty">Nenhum download.</div>'}`;
   } else if (id === 'backup') {
     body = `<div class="card"><div class="card-title">Backup e restauração</div>
       <p class="cfg-sub">Copie um backup dos favoritos e preferências. Os arquivos baixados não entram no backup.</p>
       <div class="btn-row" style="margin-top:12px"><button class="btn" data-action="backup">Copiar backup</button><button class="btn ghost" data-action="restore">Restaurar</button></div></div>`;
   } else if (id === 'sobre') {
-    body = `<div class="card"><div class="app-logo">🎵</div><div class="card-title" style="font-size:20px">Music</div>
+    body = `<div class="card"><div class="app-logo">${icon('music', 30)}</div><div class="card-title" style="font-size:20px">Music</div>
       <p class="cfg-sub">Versão ${APP_VERSION}</p>
       <p class="cfg-sub">Streaming e download de músicas da nuvem.</p>
       <p class="cfg-sub" style="margin-top:10px">Catálogo: Audius (música independente e gratuita).</p>
@@ -1491,10 +1642,10 @@ function applySetting(key, val) {
 
 // ---------- Permissões (Android) ----------
 const PERM_LIST = [
-  { key: 'notifications', statusKey: 'notifications', icon: '🔔', title: 'Notificações', sub: 'Controles da música na tela de bloqueio e na barra' },
-  { key: 'storage', statusKey: 'storage', icon: '💾', title: 'Armazenamento interno', sub: 'Salvar as músicas baixadas no aparelho' },
-  { key: 'unknown', statusKey: 'unknownSources', icon: '📦', title: 'Instalar fontes desconhecidas', sub: 'Permite instalar novas versões do APK' },
-  { key: 'battery', statusKey: 'batteryOptimization', icon: '🔋', title: 'Segundo plano sem pausas', sub: 'Impede o Android de interromper a música' },
+  { key: 'notifications', statusKey: 'notifications', icon: 'bell', title: 'Notificações', sub: 'Controles da música na tela de bloqueio e na barra' },
+  { key: 'storage', statusKey: 'storage', icon: 'storage', title: 'Armazenamento interno', sub: 'Salvar as músicas baixadas no aparelho' },
+  { key: 'unknown', statusKey: 'unknownSources', icon: 'package', title: 'Instalar fontes desconhecidas', sub: 'Permite instalar novas versões do APK' },
+  { key: 'battery', statusKey: 'batteryOptimization', icon: 'battery', title: 'Segundo plano sem pausas', sub: 'Impede o Android de interromper a música' },
 ];
 function permissionNeeds(p) {
   if (!p) return PERM_LIST.map((x) => x.key);
@@ -1503,7 +1654,7 @@ function permissionNeeds(p) {
 function permissionRowHTML(it, p) {
   const ok = !!(p && p[it.statusKey]);
   return `<div class="perm-item" data-perm="${it.key}">
-    <div class="cfg-icon">${it.icon}</div>
+    <div class="cfg-icon">${icon(it.icon, 22)}</div>
     <div class="perm-item-text"><div class="perm-item-title">${it.title}</div><div class="perm-item-sub">${it.sub}</div></div>
     <div class="perm-badge ${ok ? 'ok' : 'todo'}">${ok ? 'Liberado' : 'Permitir'}</div>
   </div>`;
@@ -1526,7 +1677,7 @@ function showPermissionSheet() {
   if (!overlay || !Native.available) return;
   const p = state.permissions || {};
   overlay.innerHTML = `<div class="perm-sheet">
-    <div class="perm-logo">🎵</div>
+    <div class="perm-logo">${icon('lock', 28)}</div>
     <h2 class="perm-title">Permissões do Music</h2>
     <p class="perm-sub">Para tocar em segundo plano, salvar músicas e instalar atualizações, libere estas permissões. Você pode mudar isso depois em Configurações.</p>
     ${PERM_LIST.map((it) => permissionRowHTML(it, p)).join('')}
@@ -1662,13 +1813,15 @@ async function downloadTrack(id, silent) {
 }
 function updateDownloadButton(id) {
   const pct = state.downloading.get(String(id));
-  $$(`[data-dl="${String(id)}"]`).forEach((b) => { b.textContent = pct != null ? Math.round(pct) + '%' : '⬇'; });
+  $$(`[data-dl="${String(id)}"]`).forEach((b) => {
+    b.innerHTML = pct != null ? `<span class="dl-pct">${Math.round(pct)}%</span>` : icon(state.downloads.has(String(id)) ? 'check' : 'download', 20);
+  });
 }
 function refreshDownloadButtons() {
   $$('[data-dl]').forEach((b) => {
     const id = b.dataset.dl;
     const pct = state.downloading.get(id);
-    b.textContent = pct != null ? Math.round(pct) + '%' : (state.downloads.has(id) ? '✓' : '⬇');
+    b.innerHTML = pct != null ? `<span class="dl-pct">${Math.round(pct)}%</span>` : icon(state.downloads.has(id) ? 'check' : 'download', 20);
     b.title = state.downloads.has(id) ? 'Baixada' : 'Baixar';
   });
 }
@@ -1775,6 +1928,20 @@ document.addEventListener('click', (e) => {
 
   const searchRetry = e.target.closest('[data-search-retry]');
   if (searchRetry) { runSearch(state.searchQuery.trim()); return; }
+
+  const searchMore = e.target.closest('[data-search-more]');
+  if (searchMore) {
+    state.searchShown = (state.searchShown || 60) + 60;
+    renderSearchBody();
+    return;
+  }
+
+  const detailMore = e.target.closest('[data-detail-more]');
+  if (detailMore && state.detail) {
+    state.detailShown = (state.detailShown || 80) + 80;
+    renderDetailList(detailTracks(state.detail));
+    return;
+  }
 
   const rm = e.target.closest('[data-remove]');
   if (rm) { e.stopPropagation(); e.preventDefault(); removeDownload(rm.dataset.remove); return; }

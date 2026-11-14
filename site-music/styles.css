@@ -50,6 +50,8 @@ body{font-size:14px}
 .section{margin:18px 0 8px}
 .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .section-title{font-size:20px;font-weight:700;margin:0;color:var(--accent2)}
+.section-sub{font-size:12px;color:var(--muted);margin:-4px 0 10px}
+.section-count{font-size:12px;color:var(--muted);font-weight:600}
 .section-arrow{color:var(--muted);font-size:20px;background:none;border:none;cursor:pointer}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .moment-card{position:relative;border-radius:10px;overflow:hidden;height:64px;display:flex;align-items:center;padding:0 14px;cursor:pointer;font-weight:700;font-size:15px;color:#fff;background-size:cover}
@@ -121,6 +123,7 @@ body{font-size:14px}
 .cfg-item{display:flex;align-items:center;gap:14px;padding:14px 4px;border-radius:8px;cursor:pointer}
 .cfg-item:active{background:var(--card)}
 .cfg-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--card);color:var(--accent2);font-size:20px;flex-shrink:0}
+.cfg-icon .ic{width:22px;height:22px}
 .cfg-text{flex:1;min-width:0}
 .cfg-title{font-size:15px;font-weight:500}
 .cfg-sub{font-size:12px;color:var(--muted);margin-top:2px}
@@ -131,6 +134,8 @@ body{font-size:14px}
 .btn{background:var(--accent2);color:#000;border:none;border-radius:999px;padding:10px 20px;font-weight:700;font-size:14px;cursor:pointer}
 .btn.ghost{background:transparent;color:var(--accent2);border:1px solid var(--border)}
 .btn.danger{background:var(--red);color:#fff}
+.btn.wide{display:block;width:100%;margin:12px 0 4px;padding:12px 18px;text-align:center}
+.btn.wide:disabled{opacity:.5;cursor:default}
 .input{width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px}
 .empty{color:var(--muted);text-align:center;padding:40px 8px}
 
@@ -260,6 +265,7 @@ html[data-theme="light"] .btn.ghost{color:var(--accent2)}
 .perm-item{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--border);cursor:pointer}
 .perm-item:last-of-type{border-bottom:none}
 .perm-item .cfg-icon{font-size:19px}
+.avatar .ic,.app-logo .ic,.perm-logo .ic{display:block}
 .perm-item-text{flex:1;min-width:0}
 .perm-item-title{font-size:14px;font-weight:600}
 .perm-item-sub{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.35}
@@ -308,8 +314,14 @@ html[data-theme="light"] .perm-sheet{box-shadow:0 -8px 40px rgba(0,0,0,.18)}
 #pShuffle.active,#pRepeat.active{color:var(--accent2)}
 
 /* Mini player */
-.minip{transition:transform .2s ease,opacity .2s ease}
+.minip{transition:transform .2s ease,opacity .2s ease;touch-action:pan-y;user-select:none;-webkit-user-select:none}
 .minip:active{transform:scale(.99)}
+.player-slide{touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab}
+.player-slide:active{cursor:grabbing}
+/* Spinner no lugar do play enquanto carrega */
+.spinner.p-spin{width:26px;height:26px;border-width:2.5px}
+.spinner.mini-spin{width:17px;height:17px;border-width:2px}
+.pctrl.play.loading{background:var(--card2);box-shadow:none}
 
 /* Novos lançamentos */
 .hcard{position:relative}
