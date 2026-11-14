@@ -2,7 +2,7 @@
    Music — player de streaming (Audius) com visual YouTube Music
    Catálogo na nuvem • capas reais • busca • download offline
    ============================================================ */
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const API = 'https://api.audius.co/v1';
 const APP_NAME = 'MusicApp';
 const FALLBACK = Array.isArray(window.FALLBACK_TRACKS) ? window.FALLBACK_TRACKS : [];
@@ -47,6 +47,7 @@ const CFG_ITEMS = [
   { id: 'tocador', icon: '🎧', title: 'Tocador e áudio' },
   { id: 'conteudo', icon: '🎵', title: 'Conteúdo' },
   { id: 'traducao', icon: '🌐', title: 'Tradução de letras por IA' },
+  { id: 'permissoes', icon: '🔐', title: 'Permissões do aplicativo' },
   { id: 'privacidade', icon: '🛡', title: 'Privacidade' },
   { id: 'armazenamento', icon: '💾', title: 'Armazenamento' },
   { id: 'backup', icon: '☁', title: 'Backup e restauração' },
@@ -96,10 +97,44 @@ const state = {
   playerOpen: false,
   online: navigator.onLine,
   trendingLoaded: false,
+  searchError: '',
+  playbackError: false,
+  autoSkips: 0,
+  needsGesture: false,
+  permissions: null,
 };
 let audio = null;
 let searchTimer = null;
 let toastTimer = null;
+let playToken = 0;
+let retryCount = new Map();
+
+// ---------- Ponte nativa (segundo plano / permissões) ----------
+const Native = (() => {
+  let plugin = null;
+  try {
+    plugin = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.MusicBackground) || null;
+  } catch (e) { plugin = null; }
+  const fire = (fn) => {
+    try { const p = fn(); if (p && typeof p.catch === 'function') p.catch(() => {}); } catch (e) {}
+  };
+  return {
+    get available() { return !!plugin; },
+    start(payload) { if (plugin) fire(() => plugin.start(payload)); },
+    update(payload) { if (plugin) fire(() => plugin.update(payload)); },
+    stop() { if (plugin) fire(() => plugin.stop()); },
+    check() { return plugin ? plugin.checkStatus().catch(() => null) : Promise.resolve(null); },
+    request(kind) { if (plugin) fire(() => plugin.askPermissions({ kind })); },
+    openUnknown() { if (plugin) fire(() => plugin.openUnknownSources()); },
+    battery() { if (plugin) fire(() => plugin.requestIgnoreBatteryOptimization()); },
+    appSettings() { if (plugin) fire(() => plugin.openAppSettings()); },
+    onAction(cb) {
+      if (!plugin || !plugin.addListener) return;
+      try { plugin.addListener('mediaAction', (data) => cb(data && data.action)); } catch (e) {}
+    },
+  };
+})();
+const WEB_MEDIA_SESSION = !Native.available;
 
 // ---------- Utils ----------
 const $ = (s, ctx = document) => ctx.querySelector(s);
@@ -110,12 +145,30 @@ function toast(msg, ms = 2400) {
   el.textContent = msg; el.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
-function fmt(s) {
-  s = Math.floor(Number(s) || 0);
-  if (!s) return '--:--';
-  const m = Math.floor(s / 60), sec = s % 60;
-  return m + ':' + (sec < 10 ? '0' : '') + sec;
+function toSeconds(v) {
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (!s) return 0;
+    if (/^\d{1,2}:\d{1,2}(:\d{1,2})?$/.test(s)) {
+      const p = s.split(':').map(Number).reverse();
+      return (p[0] || 0) + (p[1] || 0) * 60 + (p[2] || 0) * 3600;
+    }
+    v = s.replace(',', '.');
+  }
+  let n = Number(v);
+  if (!isFinite(n) || n <= 0) return 0;
+  if (n > 36000) n = n / 1000; // alguns servidores enviam milissegundos
+  return n;
 }
+function fmt(v) {
+  const total = Math.round(toSeconds(v));
+  if (!total) return '0:00';
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+}
+function fmtDur(v) { return toSeconds(v) > 0 ? fmt(v) : '--:--'; }
 function mb(bytes) { return (Number(bytes || 0) / 1048576).toFixed(1) + ' MB'; }
 function saveLiked() { try { localStorage.setItem('liked', JSON.stringify([...state.liked])); } catch (e) {} }
 function saveRecent() { try { localStorage.setItem('recent', JSON.stringify(state.recent.slice(0, 40))); } catch (e) {} }
@@ -125,18 +178,22 @@ function saveSettings() { try { localStorage.setItem('settings', JSON.stringify(
 function normalizeTracks(list, fallbackGenre) {
   return (Array.isArray(list) ? list : []).map((t) => {
     if (!t || !t.id || !t.title) return null;
+    if (t.is_delete === true) return null;
+    if (t.is_streamable === false) return null;
+    if (t.access && t.access.stream === false) return null;
+    if (t.is_stream_gated === true && !(t.access && t.access.stream)) return null;
     const rawDur = t.duration != null ? t.duration : t.dur;
-    const dur = Math.floor(Number(rawDur) || 0);
-    if (dur && dur < 30) return null;
+    const dur = Math.round(toSeconds(rawDur));
+    if (dur && dur < 20) return null;
     const art = t.art || (t.artwork && (t.artwork['480x480'] || t.artwork['150x150'])) || '';
     if (!art) return null;
     const artist = t.artist || (t.user && (t.user.name || t.user.handle)) || 'Artista';
     return {
       id: String(t.id),
       title: String(t.title).trim(),
-      artist: String(artist),
-      album: t.album || t.genre || fallbackGenre || 'Audius',
-      genre: t.genre || fallbackGenre || 'Música',
+      artist: String(artist).trim(),
+      album: String(t.album || t.genre || fallbackGenre || 'Audius').trim(),
+      genre: String(t.genre || fallbackGenre || 'Música').trim(),
       dur: dur || 0,
       art: String(art).replace('150x150', '480x480'),
       fb: t.fb || '',
@@ -222,15 +279,29 @@ async function loadDownloads() {
 }
 
 // ---------- Nuvem ----------
-async function apiFetch(path, timeout = 14000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeout);
-  try {
-    const res = await fetch(API + path, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-    return json.data || [];
-  } finally { clearTimeout(timer); }
+function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function apiFetch(path, timeout = 16000) {
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      const res = await fetch(API + path, {
+        signal: ctrl.signal,
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      return json.data || [];
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) await wait(500 * (attempt + 1));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastErr || new Error('network');
 }
 async function loadTrending() {
   if (!navigator.onLine) { state.online = false; return; }
@@ -270,32 +341,56 @@ function coverBox(t, cls, extra = '') {
 }
 
 // ---------- Áudio ----------
+function nativePayload(t, isPlaying) {
+  return {
+    title: t.title || 'Music',
+    artist: t.artist || '',
+    album: t.album || 'Music',
+    duration: Math.max(0, Math.round(toSeconds(t.dur) * 1000)),
+    isPlaying: !!isPlaying,
+    artwork: artOf(t) || '',
+  };
+}
+let nativeRunning = false;
+function syncNative(isPlaying, forceStart) {
+  if (!Native.available) return;
+  const t = state.current;
+  if (!t) {
+    if (nativeRunning) { Native.stop(); nativeRunning = false; }
+    return;
+  }
+  const payload = nativePayload(t, isPlaying);
+  if (forceStart || !nativeRunning) { Native.start(payload); nativeRunning = true; }
+  else Native.update(payload);
+}
 function initAudio() {
   audio = $('#audioEl');
   if (!audio) return;
-  audio.addEventListener('timeupdate', updateProgressUI);
-  audio.addEventListener('durationchange', updateProgressUI);
+  audio.addEventListener('timeupdate', () => { updateProgressUI(); updatePositionState(); });
+  audio.addEventListener('durationchange', () => { updateProgressUI(); updateMediaSession(); });
+  audio.addEventListener('loadedmetadata', () => { updateProgressUI(); updateMediaSession(); });
   audio.addEventListener('playing', () => {
-    state.playing = true; state.loading = false;
-    updateMediaSession(); renderPlayerUI(); refreshPlayingRows();
+    if (!state.current) return;
+    state.playing = true; state.loading = false; state.playbackError = false; state.needsGesture = false;
+    state.autoSkips = 0;
+    retryCount.delete(state.current.id);
+    updateMediaSession(); renderPlayerUI(); refreshPlayingRows(); syncNative(true, false);
   });
   audio.addEventListener('pause', () => {
     if (audio.ended) return;
     state.playing = false; state.loading = false;
     updateMediaSession(); renderPlayerUI();
+    if (state.current) syncNative(false, false);
   });
   audio.addEventListener('waiting', () => { state.loading = true; renderPlayerUI(); });
+  audio.addEventListener('stalled', () => { state.loading = true; renderPlayerUI(); });
   audio.addEventListener('canplay', () => { state.loading = false; renderPlayerUI(); });
   audio.addEventListener('ended', () => {
     if (state.repeat === 'one') { try { audio.currentTime = 0; audio.play(); } catch (e) {} return; }
     next();
   });
-  audio.addEventListener('error', () => {
-    state.loading = false; state.playing = false;
-    renderPlayerUI();
-    if (state.current) toast('Não foi possível tocar esta música. Tente outra.');
-  });
-  if ('mediaSession' in navigator) {
+  audio.addEventListener('error', onAudioError);
+  if (WEB_MEDIA_SESSION && 'mediaSession' in navigator) {
     try {
       navigator.mediaSession.setActionHandler('play', () => play());
       navigator.mediaSession.setActionHandler('pause', () => pause());
@@ -306,6 +401,83 @@ function initAudio() {
       navigator.mediaSession.setActionHandler('seekbackward', () => { audio.currentTime = Math.max(0, audio.currentTime - 10); });
       navigator.mediaSession.setActionHandler('seekforward', () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); });
     } catch (e) {}
+  }
+}
+function onAudioError() {
+  if (!state.current || !audio) return;
+  const t = state.current;
+  const code = audio.error ? audio.error.code : 0;
+  state.loading = false;
+  state.playing = false;
+  const tries = retryCount.get(t.id) || 0;
+  // 4 = MEDIA_ERR_SRC_NOT_SUPPORTED. Ainda tentamos uma vez com cache novo.
+  if (tries < 2) {
+    retryCount.set(t.id, tries + 1);
+    renderPlayerUI();
+    setTimeout(() => {
+      if (!state.current || state.current.id !== t.id) return;
+      const base = srcFor(t);
+      const sep = base.includes('?') ? '&' : '?';
+      audio.src = base + sep + 'retry=' + (tries + 1);
+      try { audio.load(); } catch (e) {}
+      audio.play().catch(() => {});
+    }, 700 * (tries + 1));
+    return;
+  }
+  state.playbackError = true;
+  renderPlayerUI();
+  updateMediaSession();
+  if (state.autoSkips < 2 && state.queue.length > 1) {
+    state.autoSkips++;
+    toast('Não foi possível tocar "' + t.title + '". Pulando…');
+    setTimeout(() => { if (state.current && state.current.id === t.id) next(); }, 1400);
+  } else {
+    toast(code === 4 ? 'Formato não suportado nesta música.' : 'Falha de conexão ao tocar. Toque em tentar de novo.');
+  }
+}
+function loadTrack(t, fromUser) {
+  if (!audio || !t) return;
+  const token = ++playToken;
+  state.current = t;
+  state.loading = true;
+  state.playing = false;
+  state.playbackError = false;
+  state.needsGesture = false;
+
+  try { audio.pause(); } catch (e) {}
+  audio.src = srcFor(t);
+  try { audio.load(); } catch (e) {}
+
+  renderPlayerUI();
+  refreshPlayingRows();
+  updateMediaSession();
+  syncNative(false, true);
+
+  const sheet = document.getElementById('lyricsSheet');
+  if (sheet && sheet.style.display !== 'none' && window.LyricsUI) window.LyricsUI.open(t);
+
+  const p = audio.play();
+  if (p && typeof p.then === 'function') {
+    p.then(() => {
+      if (token !== playToken) return;
+      state.playing = true; state.loading = false;
+      renderPlayerUI(); refreshPlayingRows(); updateMediaSession(); syncNative(true, true);
+    }).catch((err) => {
+      if (token !== playToken) return;
+      state.loading = false;
+      state.playing = false;
+      if (err && err.name === 'NotAllowedError') {
+        state.needsGesture = true;
+        toast('Toque no ▶ para iniciar a música.');
+      }
+      // Em alguns aparelhos o primeiro play() falha enquanto o WebView aquece.
+      // Uma segunda tentativa curta resolve na maioria dos casos.
+      setTimeout(() => {
+        if (token !== playToken || !state.current || state.current.id !== t.id) return;
+        if (audio.paused && !state.playbackError) audio.play().catch(() => {});
+      }, 400);
+      renderPlayerUI();
+    });
   }
 }
 function playTrack(id, queue) {
@@ -319,27 +491,8 @@ function playTrack(id, queue) {
   let idx = state.queue.indexOf(String(id));
   if (idx < 0) { state.queue.unshift(String(id)); idx = 0; }
   state.queueIndex = idx;
-  state.current = t;
-  state.playing = false;
-  state.loading = true;
-
-  const src = srcFor(t);
-  try { audio.pause(); } catch (e) {}
-  audio.src = src;
-  audio.load();
-  renderPlayerUI();
-  refreshPlayingRows();
-  updateMediaSession();
-
-  const p = audio.play();
-  if (p && typeof p.then === 'function') {
-    p.then(() => { state.playing = true; state.loading = false; renderPlayerUI(); refreshPlayingRows(); })
-      .catch(() => {
-        state.playing = false; state.loading = false;
-        renderPlayerUI();
-        toast('Toque no ▶ para iniciar a música.');
-      });
-  }
+  state.autoSkips = 0;
+  loadTrack(t, true);
 
   state.recent = [String(id), ...state.recent.filter((x) => x !== String(id))].slice(0, 30);
   saveRecent();
@@ -347,9 +500,13 @@ function playTrack(id, queue) {
 function play() {
   if (!audio) return;
   if (!state.current) { const first = state.catalog[0] || [...state.downloads.values()][0]; if (first) playTrack(first.id); return; }
-  if (!audio.src) { playTrack(state.current.id); return; }
+  if (!audio.src) { loadTrack(state.current, true); return; }
+  if (state.playbackError) { retryCount.delete(state.current.id); loadTrack(state.current, true); return; }
   const p = audio.play();
-  if (p && p.then) p.then(() => { state.playing = true; renderPlayerUI(); }).catch(() => {});
+  if (p && p.then) {
+    p.then(() => { state.playing = true; state.loading = false; renderPlayerUI(); updateMediaSession(); syncNative(true, false); })
+      .catch(() => { state.playing = false; renderPlayerUI(); toast('Não foi possível retomar. Toque em ▶ novamente.'); });
+  }
 }
 function pause() {
   if (!audio) return;
@@ -357,6 +514,7 @@ function pause() {
   state.playing = false;
   updateMediaSession();
   renderPlayerUI();
+  if (state.current) syncNative(false, false);
 }
 function togglePlay() { state.playing ? pause() : play(); }
 function next() {
@@ -385,7 +543,7 @@ function prev() {
   playTrack(state.queue[i]);
 }
 function updateMediaSession() {
-  if (!('mediaSession' in navigator) || !state.current) return;
+  if (!WEB_MEDIA_SESSION || !('mediaSession' in navigator) || !state.current) return;
   const t = state.current;
   const art = artOf(t);
   try {
@@ -397,12 +555,30 @@ function updateMediaSession() {
     });
   } catch (e) {}
   try { navigator.mediaSession.playbackState = state.playing ? 'playing' : 'paused'; } catch (e) {}
+  updatePositionState();
+}
+let posThrottle = 0;
+function updatePositionState() {
+  if (!WEB_MEDIA_SESSION || !audio || !('mediaSession' in navigator) || typeof navigator.mediaSession.setPositionState !== 'function') return;
+  const now = Date.now();
+  if (now - posThrottle < 3000) return;
+  posThrottle = now;
+  const d = audio.duration;
+  if (!isFinite(d) || d <= 0) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: d,
+      playbackRate: audio.playbackRate || 1,
+      position: Math.min(Math.max(0, audio.currentTime || 0), d),
+    });
+  } catch (e) {}
 }
 function updateProgressUI() {
   if (!audio) return;
-  const dur = audio.duration && isFinite(audio.duration) ? audio.duration : (state.current ? state.current.dur : 0);
+  const live = isFinite(audio.duration) && audio.duration > 0;
+  const dur = live ? audio.duration : (state.current ? toSeconds(state.current.dur) : 0);
   const cur = audio.currentTime || 0;
-  const pct = dur ? Math.min(100, (cur / dur) * 100) : 0;
+  const pct = dur ? Math.min(100, Math.max(0, (cur / dur) * 100)) : 0;
   const fill = $('#progFill'), thumb = $('#progThumb'), mfill = $('#minipFill');
   if (fill) fill.style.width = pct + '%';
   if (thumb) thumb.style.left = pct + '%';
@@ -442,6 +618,23 @@ function renderPlayerUI() {
   const mplay = $('#minipPlay'), pplay = $('#pPlay');
   if (mplay) mplay.textContent = glyph;
   if (pplay) pplay.textContent = glyph;
+
+  if (state.needsGesture && pplay) pplay.textContent = '▶';
+
+  const errEl = $('#playerError');
+  if (errEl) {
+    if (state.playbackError && t) {
+      errEl.style.display = 'flex';
+      errEl.innerHTML = '<span>Não foi possível carregar esta música.</span><button type="button" data-action="retryTrack">Tentar de novo</button>';
+    } else {
+      errEl.style.display = 'none';
+    }
+  }
+  const lyricsBtn = $('#pLyrics');
+  if (lyricsBtn) {
+    const sheet = $('#lyricsSheet');
+    lyricsBtn.classList.toggle('active', !!(sheet && sheet.style.display !== 'none'));
+  }
 
   const shuffle = $('#pShuffle'), repeat = $('#pRepeat'), like = $('#pLike'), dl = $('#pDownload');
   if (shuffle) shuffle.classList.toggle('active', state.shuffle);
@@ -485,6 +678,7 @@ function closePlayer() {
   state.playerOpen = false;
   const p = $('#player');
   if (p) p.style.display = 'none';
+  if (window.LyricsUI) window.LyricsUI.close();
 }
 
 // ---------- Render helpers ----------
@@ -500,7 +694,7 @@ function trackRow(t, opts = {}) {
       <div class="track-title">${esc(t.title)}</div>
       <div class="track-artist">${esc(t.artist)}${genre}${isCurrent ? ' · tocando' : ''}</div>
     </div>
-    <div class="track-dur">${fmt(t.dur)}</div>
+    <div class="track-dur">${fmtDur(t.dur)}</div>
     ${opts.noDownload ? '' : `<button class="track-more" data-dl="${esc(t.id)}" title="${dl ? 'Baixada' : 'Baixar'}" aria-label="Baixar">${dlPct != null ? Math.round(dlPct) + '%' : (dl ? '✓' : '⬇')}</button>`}
   </div>`;
 }
@@ -713,6 +907,29 @@ function renderPesquisar() {
   });
   renderSearchBody();
 }
+function rankMatches(list, q) {
+  const ql = q.toLowerCase().trim();
+  const scored = [];
+  const seen = new Set();
+  for (const t of list) {
+    const title = String(t.title || '').toLowerCase();
+    const artist = String(t.artist || '').toLowerCase();
+    const genre = String(t.genre || '').toLowerCase();
+    const album = String(t.album || '').toLowerCase();
+    if (!(title + ' ' + artist + ' ' + genre + ' ' + album).includes(ql)) continue;
+    let score = 0;
+    if (title === ql) score += 120;
+    else if (title.startsWith(ql)) score += 70;
+    else if (title.includes(ql)) score += 45;
+    if (artist === ql) score += 60;
+    else if (artist.startsWith(ql)) score += 35;
+    else if (artist.includes(ql)) score += 20;
+    if (genre.includes(ql)) score += 8;
+    if (album.includes(ql)) score += 5;
+    if (!seen.has(t.id)) { seen.add(t.id); scored.push({ t, score }); }
+  }
+  return scored.sort((a, b) => b.score - a.score).map((x) => x.t);
+}
 function renderSearchBody() {
   const el = $('#searchBody');
   if (!el || state.route !== 'pesquisar') return;
@@ -736,13 +953,16 @@ function renderSearchBody() {
   }
 
   const ql = q.toLowerCase();
-  const match = (t) => (t.title + ' ' + t.artist + ' ' + (t.genre || '') + ' ' + (t.album || '')).toLowerCase().includes(ql);
-  const tracks = all.filter(match);
+  const tracks = rankMatches(all, q);
   const spinner = state.searching ? '<div class="search-status"><span class="spinner"></span> Buscando na nuvem…</div>' : '';
+  const errBanner = state.searchError
+    ? `<div class="search-error"><span>${esc(state.searchError)}</span><button type="button" data-search-retry>Recarregar</button></div>`
+    : '';
+  const head = spinner + errBanner;
 
   if (filter === 'Artistas') {
     const artists = [...new Set(tracks.map((t) => t.artist))].filter((a) => a.toLowerCase().includes(ql));
-    el.innerHTML = spinner + `<div class="section"><div class="section-head"><h2 class="section-title">Artistas</h2></div>
+    el.innerHTML = head + `<div class="section"><div class="section-head"><h2 class="section-title">Artistas</h2></div>
       ${artists.length ? artists.map((a) => {
         const t = tracks.find((x) => x.artist === a);
         return `<div class="track" data-open-type="artist" data-open-key="${esc(a)}">
@@ -754,7 +974,7 @@ function renderSearchBody() {
   }
   if (filter === 'Álbuns') {
     const albums = [...new Set(tracks.map((t) => t.album || t.genre))].filter(Boolean);
-    el.innerHTML = spinner + `<div class="section"><div class="section-head"><h2 class="section-title">Álbuns</h2></div>
+    el.innerHTML = head + `<div class="section"><div class="section-head"><h2 class="section-title">Álbuns</h2></div>
       ${albums.length ? albums.map((a) => {
         const t = tracks.find((x) => (x.album || x.genre) === a);
         return `<div class="track" data-open-type="album" data-open-key="${esc(a)}">
@@ -766,7 +986,7 @@ function renderSearchBody() {
   }
   if (filter === 'Playlists') {
     const pls = buildPlaylists().filter((p) => (p.name + ' ' + p.genre).toLowerCase().includes(ql));
-    el.innerHTML = spinner + `<div class="section"><div class="section-head"><h2 class="section-title">Playlists</h2></div>
+    el.innerHTML = head + `<div class="section"><div class="section-head"><h2 class="section-title">Playlists</h2></div>
       ${pls.length ? pls.map((p) => `<div class="track" data-open-type="playlist" data-open-key="${esc(p.genre)}">
         ${coverBox(p.tracks[0], 'track-cover')}
         <div class="track-info"><div class="track-title">${esc(p.name)}</div><div class="track-artist">${p.tracks.length} músicas · ${esc(p.artist)}</div></div>
@@ -776,14 +996,15 @@ function renderSearchBody() {
 
   // Tudo / Músicas
   const list = tracks.slice(0, 40);
-  el.innerHTML = `${spinner}
+  el.innerHTML = `${head}
     ${list.length ? `<div class="section"><div class="section-head"><h2 class="section-title">Músicas</h2><span class="section-count">${tracks.length}</span></div>${trackList(list)}</div>`
-      : (state.searching ? '' : '<div class="empty">Nada encontrado.<br>Tente outro nome ou verifique sua conexão.</div>')}`;
+      : (state.searching ? '' : '<div class="empty">Nada encontrado para esta busca.<br>Tente outro nome de música ou artista.</div>')}`;
 }
 async function runSearch(q) {
   if (!q || q.length < 2) return;
   const token = ++state.searchToken;
   state.searching = true;
+  state.searchError = '';
   renderSearchBody();
   try {
     const data = await apiFetch(`/tracks/search?query=${encodeURIComponent(q)}&app_name=${APP_NAME}&limit=30`);
@@ -791,8 +1012,14 @@ async function runSearch(q) {
     const list = normalizeTracks(data);
     mergeCatalog(list);
     state.online = true;
+    if (!list.length) state.searchError = '';
   } catch (e) {
-    if (token === state.searchToken) state.online = navigator.onLine;
+    if (token === state.searchToken) {
+      state.online = navigator.onLine;
+      state.searchError = navigator.onLine
+        ? 'A busca na nuvem falhou agora. Mostrando o catálogo salvo.'
+        : 'Você está sem internet. Mostrando o catálogo salvo.';
+    }
   }
   state.searching = false;
   if (token === state.searchToken && state.route === 'pesquisar') renderSearchBody();
@@ -929,6 +1156,13 @@ function cfgSub(id) {
   if (id === 'tocador') return 'Qualidade, crossfade';
   if (id === 'conteudo') return 'Downloads e preferências';
   if (id === 'traducao') return state.settings.translateLyrics ? 'Ativado' : 'Desativado';
+  if (id === 'permissoes') {
+    if (!Native.available) return 'Disponível no APK Android';
+    const p = state.permissions;
+    if (!p) return 'Verificando…';
+    const ok = [p.notifications, p.storage, p.unknownSources, p.batteryOptimization].filter(Boolean).length;
+    return ok + ' de 4 liberadas';
+  }
   if (id === 'privacidade') return 'Dados e permissões';
   if (id === 'armazenamento') return `${state.downloads.size} baixada(s) · ${mb(downloadsSize())}`;
   if (id === 'backup') return 'Backup dos seus dados';
@@ -990,7 +1224,12 @@ function renderConfigDetail(el) {
     body = `<div class="card">${setRow('wifiOnly', 'Baixar apenas via Wi-Fi', 'Evita usar seus dados móveis')}${setRow('showExplicit', 'Mostrar conteúdo explícito', 'Pode ocultar faixas marcadas')}${setRow('personalized', 'Recomendações personalizadas', 'Baseadas no que você ouve')}</div>`;
   } else if (id === 'traducao') {
     body = `<div class="card">${setRow('translateLyrics', 'Tradução de letras por IA', 'Traduz as letras automaticamente para português')}
-      <p class="cfg-sub" style="margin-top:12px">As letras traduzidas aparecem no player quando disponíveis.</p></div>`;
+      <p class="cfg-sub" style="margin-top:12px">Abra uma música, toque em 🎤 no player e depois em “Traduzir (IA)”. A tradução aparece logo abaixo de cada trecho da letra.</p></div>`;
+  } else if (id === 'permissoes') {
+    body = permissionSettingsHTML();
+    if (Native.available && !state.permissions) {
+      Native.check().then((s) => { if (s) { state.permissions = s; updatePermissionUI(); } });
+    }
   } else if (id === 'privacidade') {
     body = `<div class="card">${setRow('analytics', 'Enviar dados de uso', 'Ajuda a melhorar o aplicativo')}
       <div class="set-row" data-action="clearRecent"><div><div class="set-label">Limpar histórico</div><div class="set-sub">Remove as músicas tocadas recentemente</div></div><div class="cfg-arrow">›</div></div>
@@ -1039,7 +1278,118 @@ function applySetting(key, val) {
     state.settings[key] = val === '1' ? true : val === '0' ? false : val;
   }
   saveSettings();
+  if (key === 'translateLyrics' && window.LyricsUI) window.LyricsUI.setAuto(!!state.settings.translateLyrics);
   renderConfig();
+}
+
+// ---------- Permissões (Android) ----------
+const PERM_LIST = [
+  { key: 'notifications', statusKey: 'notifications', icon: '🔔', title: 'Notificações', sub: 'Controles da música na tela de bloqueio e na barra' },
+  { key: 'storage', statusKey: 'storage', icon: '💾', title: 'Armazenamento interno', sub: 'Salvar as músicas baixadas no aparelho' },
+  { key: 'unknown', statusKey: 'unknownSources', icon: '📦', title: 'Instalar fontes desconhecidas', sub: 'Permite instalar novas versões do APK' },
+  { key: 'battery', statusKey: 'batteryOptimization', icon: '🔋', title: 'Segundo plano sem pausas', sub: 'Impede o Android de interromper a música' },
+];
+function permissionNeeds(p) {
+  if (!p) return PERM_LIST.map((x) => x.key);
+  return PERM_LIST.filter((it) => !p[it.statusKey]).map((it) => it.key);
+}
+function permissionRowHTML(it, p) {
+  const ok = !!(p && p[it.statusKey]);
+  return `<div class="perm-item" data-perm="${it.key}">
+    <div class="cfg-icon">${it.icon}</div>
+    <div class="perm-item-text"><div class="perm-item-title">${it.title}</div><div class="perm-item-sub">${it.sub}</div></div>
+    <div class="perm-badge ${ok ? 'ok' : 'todo'}">${ok ? 'Liberado' : 'Permitir'}</div>
+  </div>`;
+}
+function permissionSettingsHTML() {
+  if (!Native.available) {
+    return `<div class="card"><div class="card-title">Permissões do aplicativo</div>
+      <p class="cfg-sub">As permissões de armazenamento, notificações e segundo plano são solicitadas dentro do APK Android. No navegador não são necessárias.</p></div>`;
+  }
+  if (!state.permissions) return `<div class="card"><div class="search-status"><span class="spinner"></span> Verificando permissões…</div></div>`;
+  return `<div class="card">${PERM_LIST.map((it) => permissionRowHTML(it, state.permissions)).join('')}</div>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn" data-action="allowAll">Permitir tudo</button>
+      <button class="btn ghost" data-action="openAppSettings">Abrir ajustes do app</button>
+    </div>
+    <p class="cfg-sub" style="margin-top:12px">Se alguma janela não abrir, libere manualmente em Configurações do Android › Apps › Music › Permissões.</p>`;
+}
+function showPermissionSheet() {
+  const overlay = $('#permOverlay');
+  if (!overlay || !Native.available) return;
+  const p = state.permissions || {};
+  overlay.innerHTML = `<div class="perm-sheet">
+    <div class="perm-logo">🎵</div>
+    <h2 class="perm-title">Permissões do Music</h2>
+    <p class="perm-sub">Para tocar em segundo plano, salvar músicas e instalar atualizações, libere estas permissões. Você pode mudar isso depois em Configurações.</p>
+    ${PERM_LIST.map((it) => permissionRowHTML(it, p)).join('')}
+    <div class="perm-actions">
+      <button class="btn" data-action="allowAll">Permitir tudo</button>
+      <button class="btn ghost" data-action="permLater">Agora não</button>
+    </div>
+    <p class="perm-note">“Instalar fontes desconhecidas” serve para você instalar novas versões do APK. O Music não instala nada sozinho.</p>
+  </div>`;
+  overlay.style.display = 'flex';
+}
+function hidePermissionSheet() {
+  const o = $('#permOverlay');
+  if (o) { o.style.display = 'none'; o.innerHTML = ''; }
+}
+function updatePermissionUI() {
+  const overlay = $('#permOverlay');
+  if (overlay && overlay.style.display !== 'none') {
+    PERM_LIST.forEach((it) => {
+      const item = overlay.querySelector(`[data-perm="${it.key}"]`);
+      if (!item) return;
+      const badge = item.querySelector('.perm-badge');
+      const ok = !!(state.permissions && state.permissions[it.statusKey]);
+      if (badge) { badge.className = 'perm-badge ' + (ok ? 'ok' : 'todo'); badge.textContent = ok ? 'Liberado' : 'Permitir'; }
+    });
+  }
+  if (state.route === 'config' && state.settingsSection === 'permissoes') renderConfig();
+  const sub = $('[data-cfg="permissoes"] .cfg-sub');
+  if (sub) sub.textContent = cfgSub('permissoes');
+  const tr = $('#topRight');
+  if (tr && state.route === 'inicio') { /* mantém os botões do topo */ }
+}
+function requestPermission(key) {
+  if (!Native.available) { toast('Permissões disponíveis apenas no APK Android.'); return; }
+  if (key === 'notifications' || key === 'storage' || key === 'all') {
+    Native.request(key === 'all' ? 'all' : key);
+    pollPermissions(key === 'all' ? 14 : 10);
+  } else if (key === 'unknown') Native.openUnknown();
+  else if (key === 'battery') Native.battery();
+  else if (key === 'settings') Native.appSettings();
+}
+function pollPermissions(times = 10) {
+  let n = 0;
+  const tick = async () => {
+    n++;
+    const s = await Native.check();
+    if (s) {
+      state.permissions = s;
+      updatePermissionUI();
+      if (permissionNeeds(s).length === 0) {
+        hidePermissionSheet();
+        toast('Tudo pronto! Reprodução em segundo plano liberada.');
+        return;
+      }
+    }
+    if (n < times) setTimeout(tick, 700);
+  };
+  setTimeout(tick, 400);
+}
+async function initPermissions() {
+  if (!Native.available) return;
+  try {
+    const s = await Native.check();
+    if (!s) return;
+    state.permissions = s;
+    updatePermissionUI();
+    const needs = permissionNeeds(s);
+    const snooze = Number(localStorage.getItem('permSnooze') || 0);
+    if (needs.length && Date.now() > snooze) showPermissionSheet();
+  } catch (e) {}
 }
 
 // ---------- Ações ----------
@@ -1154,6 +1504,28 @@ async function clearDownloads(skipConfirm) {
 }
 function toastAction(msg) { toast(msg); }
 function handleAction(action) {
+  if (action === 'retryTrack') {
+    if (!state.current) return;
+    retryCount.delete(state.current.id);
+    state.playbackError = false;
+    loadTrack(state.current, true);
+    return;
+  }
+  if (action === 'allowAll') {
+    if (!Native.available) { toast('Permissões disponíveis apenas no APK Android.'); return; }
+    const p = state.permissions || {};
+    if (!p.notifications || !p.storage) Native.request('all');
+    pollPermissions(14);
+    toast('Libere as janelas que abrirem. Depois toque nas outras permissões.');
+    return;
+  }
+  if (action === 'permLater') {
+    try { localStorage.setItem('permSnooze', String(Date.now() + 12 * 3600 * 1000)); } catch (e) {}
+    hidePermissionSheet();
+    toast('Você pode liberar depois em Configurações › Permissões.');
+    return;
+  }
+  if (action === 'openAppSettings') { requestPermission('settings'); return; }
   if (action === 'checkUpdate') toast('Você está na versão mais recente.');
   else if (action === 'signIn') toast('Conta opcional: streaming liberado sem login.');
   else if (action === 'together') toast('Sessão criada! Código: MUSIC-' + Math.random().toString(36).slice(2, 6).toUpperCase());
@@ -1191,6 +1563,12 @@ function handleAction(action) {
 
 // ---------- Registro global de cliques ----------
 document.addEventListener('click', (e) => {
+  const permItem = e.target.closest('[data-perm]');
+  if (permItem) { requestPermission(permItem.dataset.perm); return; }
+
+  const searchRetry = e.target.closest('[data-search-retry]');
+  if (searchRetry) { runSearch(state.searchQuery.trim()); return; }
+
   const rm = e.target.closest('[data-remove]');
   if (rm) { e.stopPropagation(); e.preventDefault(); removeDownload(rm.dataset.remove); return; }
 
@@ -1263,6 +1641,42 @@ async function init() {
   await loadDownloads();
   initAudio();
   showScreen('inicio');
+  initPermissions();
+
+  Native.onAction((action) => {
+    if (action === 'toggle') togglePlay();
+    else if (action === 'play') play();
+    else if (action === 'pause') pause();
+    else if (action === 'next') next();
+    else if (action === 'prev') prev();
+    else if (action === 'stop') { pause(); Native.stop(); nativeRunning = false; }
+  });
+
+  if (window.LyricsUI) {
+    window.LyricsUI.init({
+      getTranslate: () => !!state.settings.translateLyrics,
+      toast,
+      onTranslateChange: (val) => {
+        state.settings.translateLyrics = !!val;
+        saveSettings();
+        if (state.route === 'config') renderConfig();
+      },
+    });
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (audio) {
+      state.playing = !audio.paused && !audio.ended;
+      state.loading = false;
+      renderPlayerUI();
+      if (state.playerOpen) renderQueueUI();
+      if (state.current) syncNative(state.playing, false);
+    }
+    if (Native.available) {
+      Native.check().then((s) => { if (s) { state.permissions = s; updatePermissionUI(); } });
+    }
+  });
 
   window.addEventListener('online', () => { state.online = true; toast('Conectado'); loadTrending(); });
   window.addEventListener('offline', () => { state.online = false; toast('Sem internet'); renderInicio(); });
@@ -1303,6 +1717,11 @@ async function init() {
     if (state.route === 'biblioteca' && state.libTab === 'favoritos') renderBiblioteca();
   });
   $('#pDownload').addEventListener('click', () => { if (state.current) downloadTrack(state.current.id); });
+  $('#pLyrics').addEventListener('click', () => {
+    const t = state.current;
+    if (!t) { toast('Escolha uma música primeiro.'); return; }
+    if (window.LyricsUI) window.LyricsUI.toggle(t);
+  });
   $('#pQueue').addEventListener('click', () => {
     const q = $('#playerQueue');
     if (!q) return;
