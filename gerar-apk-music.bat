@@ -11,6 +11,7 @@ echo [1/3] Sincronizando o site para a pasta www...
 if not exist www mkdir www
 copy /Y index.html  www\index.html  >nul
 copy /Y app.js      www\app.js      >nul
+copy /Y catalog.js  www\catalog.js  >nul
 copy /Y styles.css  www\styles.css  >nul
 copy /Y logo.svg    www\logo.svg    >nul
 if exist icone-192.png copy /Y icone-192.png www\icone-192.png >nul
