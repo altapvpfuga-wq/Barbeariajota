@@ -57,6 +57,7 @@
       <button class="minip-btn" id="minipPrev" aria-label="Anterior">&#9664;&#9664;</button>
       <button class="minip-btn" id="minipPlay" aria-label="Play/Pause">&#9654;</button>
       <button class="minip-btn" id="minipNext" aria-label="Próxima">&#9654;&#9654;</button>
+      <div class="minip-progress"><div class="minip-fill" id="minipFill"></div></div>
     </div>
     <div class="player" id="player" style="display:none">
       <div class="player-head">
@@ -94,7 +95,8 @@
     </div>
     <div class="toast" id="toast"></div>
   </div>
-  <audio id="audioEl" preload="none" crossorigin="anonymous"></audio>
+  <audio id="audioEl" preload="auto" playsinline></audio>
+  <script src="catalog.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -75,7 +75,7 @@ body{font-size:14px}
 .track-more{background:none;border:none;color:var(--muted);font-size:20px;padding:6px;cursor:pointer}
 
 /* Floating buttons */
-.fab-wrap{position:fixed;right:16px;bottom:90px;display:flex;flex-direction:column;gap:10px;z-index:4}
+.fab-wrap{position:fixed;right:16px;bottom:138px;display:flex;flex-direction:column;gap:10px;z-index:4}
 .fab{width:56px;height:56px;border-radius:16px;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.5)}
 .fab.mic{background:var(--card);color:var(--text);border-radius:50%}
 .fab.shuffle{background:var(--accent2);color:#000}
@@ -131,7 +131,7 @@ body{font-size:14px}
 .empty{color:var(--muted);text-align:center;padding:40px 8px}
 
 /* Toast */
-.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--card2);color:var(--text);padding:10px 18px;border-radius:8px;font-size:13px;z-index:50;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center}
+.toast{position:fixed;bottom:140px;left:50%;transform:translateX(-50%);background:var(--card2);color:var(--text);padding:10px 18px;border-radius:8px;font-size:13px;z-index:50;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center}
 .toast.show{opacity:1}
 
 /* Detail header */
@@ -149,3 +149,77 @@ body{font-size:14px}
 .hero-title{font-size:22px;font-weight:700}
 .hero-sub{font-size:13px;color:var(--muted);margin-top:4px}
 .play-all{margin:14px 0;display:flex;gap:10px}
+
+/* ================= Capas reais ================= */
+.cover{position:relative;overflow:hidden}
+.track-cover,.hcard-cover,.hero-cover,.player-cover,.minip-cover{position:relative;overflow:hidden}
+.cover img,.track-cover img,.hcard-cover img,.hero-cover img,.player-cover img,.minip-cover img{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;display:block;
+  background:transparent;
+}
+.cover-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;color:rgba(255,255,255,.8);z-index:1}
+.hcard-cover .cover-ph{font-size:40px}
+.hero-cover .cover-ph{font-size:56px}
+.player-cover .cover-ph{font-size:72px}
+.minip-cover .cover-ph{font-size:16px}
+.track.playing .track-title{color:var(--accent2);font-weight:700}
+.track.playing .track-cover{box-shadow:0 0 0 2px var(--accent2)}
+.artist-round{border-radius:50%!important}
+
+/* ================= Busca ================= */
+.search-bar{position:relative;margin:4px 0 2px}
+.search-input{padding-left:40px;padding-right:38px;height:46px;font-size:15px;border-radius:10px}
+.search-ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:15px;color:var(--muted);z-index:1}
+.search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);font-size:24px;line-height:1;padding:4px 8px;cursor:pointer}
+.search-filters{margin-top:8px}
+.search-status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:10px 4px}
+.section-count{font-size:13px;color:var(--muted)}
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--accent2);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ================= Mini player / progresso ================= */
+.minip{padding-bottom:9px}
+.minip-progress{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(255,255,255,.13);border-radius:0 0 8px 8px;overflow:hidden}
+.minip-fill{height:100%;width:0;background:var(--accent2);transition:width .2s linear}
+
+/* ================= Configurações ================= */
+.card-title{font-size:16px;font-weight:700;margin-bottom:6px}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 2px;border-bottom:1px solid var(--border);cursor:pointer}
+.set-row:last-child{border-bottom:none}
+.set-label{font-size:15px;font-weight:500}
+.set-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.switch{width:44px;height:24px;border-radius:12px;background:var(--card2);position:relative;flex-shrink:0;transition:background .2s;border:1px solid var(--border)}
+.switch span{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#f1f1f1;transition:left .2s}
+.switch.on{background:var(--accent2);border-color:var(--accent2)}
+.switch.on span{left:22px;background:#000}
+.cfg-update{color:#ff9800!important}
+.offline-banner{background:rgba(255,152,0,.12);border:1px solid rgba(255,152,0,.4);color:#ffb74d;border-radius:8px;padding:10px 12px;font-size:12px;margin:6px 0 10px}
+.storage-summary{background:var(--card);border-radius:10px;padding:14px;margin:4px 0 14px}
+.account-card{text-align:center}
+.avatar,.app-logo{width:64px;height:64px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 12px}
+.app-logo{border-radius:16px;background:linear-gradient(135deg,#3ea6ff,#a8c7fa);color:#000}
+
+/* ================= Tema claro ================= */
+html[data-theme="light"]{
+  --bg:#ffffff;
+  --bg2:#f8f8f8;
+  --card:#f0f0f0;
+  --card2:#e6e6e6;
+  --hover:#dddddd;
+  --text:#0f0f0f;
+  --muted:#606060;
+  --dim:#888888;
+  --border:#e2e2e2;
+  --accent:#065fd4;
+  --accent2:#065fd4;
+}
+html[data-theme="light"] .player{background:linear-gradient(180deg,#e7f0fd 0%,#ffffff 60%)}
+html[data-theme="light"] .pctrl.play{background:#0f0f0f;color:#fff}
+html[data-theme="light"] .spinner{border-color:rgba(0,0,0,.15);border-top-color:var(--accent2)}
+html[data-theme="light"] .switch.on span{background:#fff}
+html[data-theme="light"] .minip-progress{background:rgba(0,0,0,.1)}
+html[data-theme="light"] .chip.active{background:#0f0f0f;color:#fff;border-color:#0f0f0f}
+html[data-theme="light"] .btn{color:#fff}
+html[data-theme="light"] .btn.ghost{color:var(--accent2)}
+
