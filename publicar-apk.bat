@@ -104,13 +104,13 @@ echo       pronto: APK\Barbearia-do-Jota-v%NOVA%.apk
 REM ---------- 4b. atualiza e gera tambem o APK do PAINEL ----------
 echo.
 echo [2b/4] Atualizando o APK do Painel...
-if exist "%RAIZ%\apk-painel\android" (
+if exist "%RAIZ%\..\apk-painel\android" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%RAIZ%\atualizar-painel.ps1" %NOVA%
   if errorlevel 1 (
     echo [AVISO] O APK do Painel nao saiu. O app do cliente sera publicado do mesmo jeito.
   )
 ) else (
-  echo       pasta apk-painel nao existe, pulando o Painel.
+  echo       pasta ..\apk-painel nao existe, pulando o Painel.
 )
 
 REM ---------- 5. envia para o GitHub ----------

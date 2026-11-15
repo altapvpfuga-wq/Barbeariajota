@@ -1,9 +1,6 @@
-# outros projetos que dividem esta mesma pasta (nao vao para o GitHub)
-jogo/
-jogo-corrida/
-app-barbearia/
-
-# dependencias
+# outros projetos que NAO fazem parte deste repositorio
+# (site-music, apk-painel, controle-tv, sala-bots, ControleUniversal e estudo-appmagia
+#  agora ficam na pasta pai, cada um na sua propria pasta)
 node_modules/
 backend/node_modules/
 site-barbearia/node_modules/
@@ -19,20 +16,6 @@ site-barbearia/android/app/src/main/assets/capacitor.plugins.json
 site-barbearia/android/capacitor-cordova-android-plugins/
 site-barbearia/android/app/capacitor.build.gradle
 site-barbearia/android/capacitor.settings.gradle
-
-# site-music (mesmo padrao do site-barbearia)
-site-music/node_modules/
-site-music/android/build/
-site-music/android/app/build/
-site-music/android/.gradle/
-site-music/android/local.properties
-site-music/android/app/src/main/assets/public/
-site-music/android/app/src/main/assets/capacitor.config.json
-site-music/android/app/src/main/assets/capacitor.plugins.json
-site-music/android/capacitor-cordova-android-plugins/
-site-music/android/app/capacitor.build.gradle
-site-music/android/capacitor.settings.gradle
-site-music/www/
 
 # apks e arquivos grandes
 /APK/

@@ -4,7 +4,8 @@ param([Parameter(Mandatory = $true)][string]$Versao)
 
 $erro = 0
 $raiz = Split-Path -Parent $MyInvocation.MyCommand.Path
-$painel = Join-Path $raiz 'apk-painel'
+# o Painel agora mora em ..\apk-painel (pasta propria, fora deste repositorio)
+$painel = Join-Path (Split-Path -Parent $raiz) 'apk-painel'
 
 if ($Versao -notmatch '^\d+(\.\d+)*$') {
   Write-Host "ERRO: versao invalida '$Versao'." -ForegroundColor Red
