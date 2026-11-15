@@ -60,13 +60,14 @@ Clique 2x em **`publicar-apk.bat`**: ele sobe a versão, gera o APK do cliente *
 ## Estrutura dos arquivos
 
 ```
-site+apk+github/
+Projeto Padrão/
   apk-painel/            <- fonte do Painel (index.html, painel.js)
     android/             <- projeto Android próprio (app com.barbeariadojota.painel)
-  site-barbearia/        <- fonte do site / app do cliente
-  backend/server.js      <- servidor do PC (opcional: Pix + backup)
-  backend/painel.json    <- backup central dos agendamentos
-  atualizar-painel.ps1   <- sobe versão e compila o Painel sozinho
-  publicar-apk.bat       <- publica os DOIS apps no GitHub
-  APK/                   <- APKs compilados prontos para instalar
+  barbearia-do-jota/     <- este repositorio
+    site-barbearia/      <- fonte do site / app do cliente
+    backend/server.js    <- servidor do PC (opcional: Pix + backup)
+    backend/painel.json  <- backup central dos agendamentos
+    atualizar-painel.ps1 <- sobe versão e compila o Painel sozinho (usa ..\apk-painel)
+    publicar-apk.bat     <- publica os DOIS apps no GitHub
+    APK/                 <- APKs compilados prontos para instalar
 ```

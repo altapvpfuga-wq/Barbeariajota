@@ -39,10 +39,13 @@ Se você abrir alguma delas, o Windows mostra o aviso.
 | `backend\` | Servidor que confere o Pix na InfinitePay |
 | `APK\` | APKs prontos para instalar |
 | `app-barbearia\` | Projeto Expo (abandonado, pode apagar) |
-| `jogo\`, `jogo-corrida\` | Projetos antigos, não relacionados |
 | `*.bat` | Scripts para ligar, gerar APK e publicar |
 | `*.md` | Documentação |
 | `servidor.log` | Log do servidor do Pix |
+
+> Os outros apps (**site-music**, **apk-painel**, **controle-tv**, **sala-bots**,
+> **ControleUniversal**) **não ficam mais aqui dentro**. Cada um tem a sua própria
+> pasta ao lado desta (`..\site-music`, `..\apk-painel`, ...).
 
 ---
 
@@ -74,7 +77,6 @@ apenas uma cópia de trabalho, não um segundo site.
 Pode apagar sem medo:
 
 - `app-barbearia\` (projeto Expo abandonado)
-- `jogo\`, `jogo-corrida\` (projetos antigos)
 - `site-barbearia\android\app\build\` (será recriado no próximo build)
 - `servidor.log`, `servidor-erro.log`
 - `site-barbearia.rar`, `corrida-maluca.zip`
