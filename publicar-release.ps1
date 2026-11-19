@@ -8,8 +8,8 @@
 param(
   [Parameter(Mandatory = $true)][string]$Versao,
   [Parameter(Mandatory = $true)][string]$Apk,
-  [string]$Usuario = 'Surtadoo',
-  [string]$Repositorio = 'barbearia-do-jota',
+  [string]$Usuario = 'altapvpfuga-wq',
+  [string]$Repositorio = 'Barbeariajota',
   [string]$Mensagem = ''
 )
 

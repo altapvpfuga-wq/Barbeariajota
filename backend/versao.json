@@ -1,12 +1,12 @@
 {
   "cliente": {
-    "versao": "1.0.56",
-    "url": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/cliente.apk",
+    "versao": "1.0.57",
+    "url": "https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk",
     "notas": "Nova versão com correções e notificações funcionando."
   },
   "painel": {
-    "versao": "1.0.56",
-    "url": "https://snxfixolrgxizoqczmbv.supabase.co/storage/v1/object/public/apk/painel.apk",
+    "versao": "1.0.57",
+    "url": "https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Painel-v1.0.57.apk",
     "notas": "Nova versão com correções e notificações funcionando."
   }
 }

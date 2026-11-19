@@ -980,7 +980,7 @@ function versaoLimpa(tag) {
 // O IP do Render e compartilhado: a API do GitHub pode responder 403
 // (limite de consultas). O feed .atom nao tem esse limite.
 async function releasePeloAtom() {
-  const r = await fetch('https://github.com/Surtadoo/barbearia-do-jota/releases.atom', {
+  const r = await fetch('https://github.com/altapvpfuga-wq/Barbeariajota/releases.atom', {
     headers: { 'User-Agent': 'barbearia-backend' },
   });
   if (!r.ok) throw new Error(`atom HTTP ${r.status}`);
@@ -1004,7 +1004,7 @@ async function obterUltimaRelease() {
   }
   // 2) GitHub (quando estiver liberado)
   try {
-    const r = await fetch('https://api.github.com/repos/Surtadoo/barbearia-do-jota/releases/latest', {
+    const r = await fetch('https://api.github.com/repos/altapvpfuga-wq/Barbeariajota/releases/latest', {
       headers: { 'User-Agent': 'barbearia-backend', Accept: 'application/vnd.github+json' },
     });
     if (r.ok) {
@@ -1098,7 +1098,7 @@ app.get('/apk', async (req, res) => {
   if (fs.existsSync(arquivoApk('cliente'))) return res.redirect(302, '/download/cliente');
   try {
     const ver = await versaoParaDownload();
-    res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${ver}/Barbearia-do-Jota-v${ver}.apk`);
+    res.redirect(302, `https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v${ver}/Barbearia-do-Jota-v${ver}.apk`);
   } catch (e) {
     res.status(500).send('nao consegui achar a versao: ' + e.message);
   }
@@ -1110,7 +1110,7 @@ app.get('/painel', async (req, res) => {
   if (fs.existsSync(arquivoApk('painel'))) return res.redirect(302, '/download/painel');
   try {
     const ver = await versaoParaDownload();
-    res.redirect(302, `https://github.com/Surtadoo/barbearia-do-jota/releases/download/v${ver}/Painel-v${ver}.apk`);
+    res.redirect(302, `https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v${ver}/Painel-v${ver}.apk`);
   } catch (e) {
     res.status(500).send('nao consegui achar a versao: ' + e.message);
   }
