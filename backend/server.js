@@ -327,27 +327,51 @@ app.get('/api/painel', (req, res) => {
   res.json({ status: p.status, aberto: calcularAberto(p.status), agendamentos });
 });
 
-// Painel: o barbeiro confirmou o Pix na mao (visto na conta dele)
+// Painel: o barbeiro confirmou ou recusou o Pix na mao (visto na conta dele)
 app.post('/api/painel/pago', (req, res) => {
   if (!pinOk(req)) return res.status(401).json({ error: 'PIN errado.' });
-  const { id } = req.body || {};
+  const { id, recusado } = req.body || {};
   if (!id) return res.status(400).json({ error: 'falta o id' });
   const p = loadPainel();
   if (!p.agendamentos[id]) return res.status(404).json({ error: 'agendamento nao existe' });
-  if (p.agendamentos[id].pixStatus !== 'pago') {
-    p.agendamentos[id].pixStatus = 'pago';
-    p.agendamentos[id].status = 'confirmado';
-    p.agendamentos[id].confirmadoPor = 'barbeiro';
-    savePainel(p);
+  const ag = p.agendamentos[id];
+  const clientName = ag.clientName || '';
+  const pushToken = ag.pushToken || '';
+  const aparelhoId = ag.aparelhoId || '';
+
+  if (recusado) {
+    if (ag.pixStatus !== 'recusado') {
+      p.agendamentos[id].pixStatus = 'recusado';
+      p.agendamentos[id].status = 'cancelado';
+      p.agendamentos[id].confirmadoPor = 'barbeiro';
+      savePainel(p);
+    }
+    publicarCanal({ t: 'r', b: { id, pixStatus: 'recusado', status: 'cancelado', clientName } });
+    console.log(`[painel] pagamento recusado: ${id} (${clientName})`);
+    // envia push direcionado ao cliente (apenas para o aparelho que fez o agendamento)
+    if (pushToken) {
+      const nomeCliente = clientName.split(' ')[0] || clientName;
+      if (recusado) {
+        enviarPushParaToken('cliente', pushToken,
+          'Agendamento cancelado',
+          nomeCliente + ', seu agendamento foi cancelado. Entre em contato com a barbearia.',
+          { tipo: 'pagamento', id: String(id), status: 'recusado' }
+        ).catch((e) => console.warn('[push] falha ao avisar cliente:', e.message));
+      } else {
+        enviarPushParaToken('cliente', pushToken,
+          'Pagamento confirmado!',
+          nomeCliente + ', seu agendamento foi confirmado!',
+          { tipo: 'pagamento', id: String(id), status: 'confirmado' }
+        ).catch((e) => console.warn('[push] falha ao avisar cliente:', e.message));
+      }
+    }
+  }  // se houver registro de cobranca, marca pago tambem (evita confirmacao dupla)
+  if (!recusado) {
+    const registro = getPagamento(id);
+    if (!registro || !registro.pago) {
+      setPagamento(id, { pago: true, confirmadoEm: new Date().toISOString(), confirmadoPor: 'barbeiro' });
+    }
   }
-  // se houver registro de cobranca, marca pago tambem (evita confirmacao dupla)
-  const registro = getPagamento(id);
-  if (!registro || !registro.pago) {
-    setPagamento(id, { pago: true, confirmadoEm: new Date().toISOString(), confirmadoPor: 'barbeiro' });
-  }
-  // avisa o APLICATIVO do cliente pelo canal — o dele muda na hora
-  publicarCanal({ t: 'p', b: { id, pixStatus: 'pago', status: 'confirmado' } });
-  console.log(`[painel] pago confirmado na mao: ${id}`);
   res.json({ ok: true });
 });
 
@@ -675,7 +699,28 @@ app.post('/api/push-token', async (req, res) => {
   res.json({ ok: true, topico: topicoDoApp(nomeApp), inscrito: !!inscricao.ok });
 });
 
-// envia push pelo topico (e, se o topico falhar, token por token)
+// envia push para um token especifico (usado para notificacoes direcionadas)
+async function enviarPushParaToken(nomeApp, token, titulo, corpo, dados) {
+  const messaging = messagingDoApp(nomeApp);
+  if (!messaging || !token) return false;
+  try {
+    const dadosTexto = {};
+    for (const [chave, valor] of Object.entries(dados || {})) {
+      dadosTexto[chave] = valor == null ? '' : String(valor);
+    }
+    await messaging.send({
+      token,
+      notification: { title: titulo, body: corpo },
+      data: dadosTexto,
+      android: { priority: 'high' },
+    });
+    console.log(`[push-${nomeApp}] enviado para token especifico`);
+    return true;
+  } catch (e) {
+    console.warn(`[push-${nomeApp}] falha ao enviar para token:`, e.code || '', e.message);
+    return false;
+  }
+}
 // opcoes.alvos = { cliente: true, painel: true }
 async function enviarPush(titulo, corpo, dados, opcoes) {
   if (!firebaseOk) {

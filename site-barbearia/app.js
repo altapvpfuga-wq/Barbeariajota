@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.58',
+  APP_VERSION: '1.0.59',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.58',
+    versao: '1.0.59',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -507,6 +507,7 @@ async function confirmMoney() {
   const d = collectOrToast(); if (!d) return;
   const services = getServices(serviceIds);
   const aparelho = detectarAparelho();
+  const pushToken = localStorage.getItem(LS_PUSH_TOKEN) || '';
   const booking = {
     id: newId(), serviceIds: serviceIds, serviceName: services.map(s => s.name).join(' + '), price: getTotalPrice(serviceIds),
     clientName: d.name, clientPhone: d.phone, note: d.note,
@@ -514,6 +515,7 @@ async function confirmMoney() {
     payMethod: 'dinheiro', pixStatus: null, mpPaymentId: null,
     status: 'confirmado', createdAt: new Date().toISOString(),
     aparelho: aparelho.completo, aparelhoMarca: aparelho.marca, aparelhoModelo: aparelho.modelo,
+    pushToken: pushToken, aparelhoId: idDoAparelho(),
   };
   const list = loadBookings(); list.unshift(booking); saveBookings(list);
   await renderTimes();
@@ -632,6 +634,8 @@ async function generatePixBooking() {
   const d = collectOrToast(); if (!d) return;
   const services = getServices(serviceIds);
   const aparelho = detectarAparelho();
+  // pega o token de push salvo (se disponivel) para notificacao direcionada
+  const pushToken = localStorage.getItem(LS_PUSH_TOKEN) || '';
   pixBooking = {
     id: newId(), serviceIds: serviceIds, serviceName: services.map(s => s.name).join(' + '), price: getTotalPrice(serviceIds),
     clientName: d.name, clientPhone: d.phone, note: d.note,
@@ -639,6 +643,7 @@ async function generatePixBooking() {
     payMethod: 'pix', pixStatus: 'aguardando', pixUrl: null,
     status: 'aguardando pagamento', createdAt: new Date().toISOString(),
     aparelho: aparelho.completo, aparelhoMarca: aparelho.marca, aparelhoModelo: aparelho.modelo,
+    pushToken: pushToken, aparelhoId: idDoAparelho(),
   };
   const list = loadBookings(); list.unshift(pixBooking); saveBookings(list);
   // manda AGORA para o Painel pela internet (so entra na fila se falhar)
