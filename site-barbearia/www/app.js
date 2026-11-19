@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.57',
+  APP_VERSION: '1.0.58',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.57',
+    versao: '1.0.58',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -506,12 +506,14 @@ function collectOrToast() {
 async function confirmMoney() {
   const d = collectOrToast(); if (!d) return;
   const services = getServices(serviceIds);
+  const aparelho = detectarAparelho();
   const booking = {
     id: newId(), serviceIds: serviceIds, serviceName: services.map(s => s.name).join(' + '), price: getTotalPrice(serviceIds),
     clientName: d.name, clientPhone: d.phone, note: d.note,
     dateKey: dayKey, dateLabel: fmtFull(dayKey), dow: dowOf(dayKey), time,
     payMethod: 'dinheiro', pixStatus: null, mpPaymentId: null,
     status: 'confirmado', createdAt: new Date().toISOString(),
+    aparelho: aparelho.completo, aparelhoMarca: aparelho.marca, aparelhoModelo: aparelho.modelo,
   };
   const list = loadBookings(); list.unshift(booking); saveBookings(list);
   await renderTimes();
@@ -593,18 +595,50 @@ function showPixQr(payload) {
   box.appendChild(newImg);
 }
 
-// ===== FLUXO PIX: cria o agendamento e mostra o Pix manual =====
+// ===== detecta marca/modelo do aparelho =====
+function detectarAparelho() {
+  try {
+    const ua = navigator.userAgent || '';
+    // Android WebView: "Mozilla/5.0 (Linux; Android 14; SM-S928B Build/...; wv)..."
+    const m = ua.match(/Android[^;]*;\s*([^)]+?)(?:\s*Build|\s*;|\))/i);
+    let modelo = m ? m[1].trim() : '';
+    // limpa "wv" e outros lixo
+    modelo = modelo.replace(/\bwv\b/gi, '').trim();
+    if (!modelo) modelo = 'Android';
+    // identifica a marca
+    const lower = modelo.toLowerCase();
+    let marca = 'Android';
+    if (/samsung|sm-|gt-/i.test(lower)) marca = 'Samsung';
+    else if (/motorola|moto/i.test(lower)) marca = 'Motorola';
+    else if (/xiaomi|redmi|poco|mi /i.test(lower)) marca = 'Xiaomi';
+    else if (/huawei|honor/i.test(lower)) marca = 'Huawei';
+    else if (/lg-/i.test(lower)) marca = 'LG';
+    else if (/oneplus/i.test(lower)) marca = 'OnePlus';
+    else if (/oppo/i.test(lower)) marca = 'Oppo';
+    else if (/vivo/i.test(lower)) marca = 'Vivo';
+    else if (/realme/i.test(lower)) marca = 'Realme';
+    else if (/nokia/i.test(lower)) marca = 'Nokia';
+    else if (/asus/i.test(lower)) marca = 'Asus';
+    else if (/sony/i.test(lower)) marca = 'Sony';
+    else if (/lenovo/i.test(lower)) marca = 'Lenovo';
+    return { marca, modelo, completo: marca + ' ' + modelo };
+  } catch {
+    return { marca: 'Android', modelo: 'Desconhecido', completo: 'Android' };
+  }
+}
 // Sem conferimento automatico (InfinitePay): o cliente paga pelo QR Code /
 // chave / copia-e-cola e avisa no WhatsApp. A barbearia confirma no painel.
 async function generatePixBooking() {
   const d = collectOrToast(); if (!d) return;
   const services = getServices(serviceIds);
+  const aparelho = detectarAparelho();
   pixBooking = {
     id: newId(), serviceIds: serviceIds, serviceName: services.map(s => s.name).join(' + '), price: getTotalPrice(serviceIds),
     clientName: d.name, clientPhone: d.phone, note: d.note,
     dateKey: dayKey, dateLabel: fmtFull(dayKey), dow: dowOf(dayKey), time,
     payMethod: 'pix', pixStatus: 'aguardando', pixUrl: null,
     status: 'aguardando pagamento', createdAt: new Date().toISOString(),
+    aparelho: aparelho.completo, aparelhoMarca: aparelho.marca, aparelhoModelo: aparelho.modelo,
   };
   const list = loadBookings(); list.unshift(pixBooking); saveBookings(list);
   // manda AGORA para o Painel pela internet (so entra na fila se falhar)
@@ -1221,7 +1255,21 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
           renderPixArea();
         }
         checkPixOnLoad();
-        toast('✅ Sinal confirmado! Agora é só enviar no WhatsApp.');
+        const nome = (atual.clientName || '').split(' ')[0] || 'Você';
+        toast(`✅ ${nome}, seu agendamento foi confirmado!`);
+      }
+    } else if (p && p.t === 'r' && p.b && p.b.id) {
+      // a barbearia RECUSOU o pagamento: cancela o agendamento
+      const atual = loadBookings().find((b) => b.id === p.b.id);
+      if (atual) {
+        updateBooking(p.b.id, { pixStatus: 'recusado', status: 'cancelado' });
+        if (pixBooking && pixBooking.id === p.b.id) {
+          pixBooking = null;
+          pararTimerResetPix();
+          limparEstadoPagamento();
+        }
+        const nome = (atual.clientName || '').split(' ')[0] || 'Você';
+        toast(`❌ ${nome}, seu agendamento foi cancelado. Entre em contato com a barbearia.`);
       }
     }
   }
