@@ -7,11 +7,11 @@
 APP="${1:-cliente}"
 
 if [ "$APP" = "cliente" ]; then
-  URL="https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk"
+  URL="https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.59/Barbearia-do-Jota-v1.0.59.apk"
   ARQUIVO="/sdcard/Download/barbearia-cliente.apk"
   NOME="Barbearia do Jota"
 elif [ "$APP" = "painel" ]; then
-  URL="https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Painel-v1.0.57.apk"
+  URL="https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.59/Painel-v1.0.59.apk"
   ARQUIVO="/sdcard/Download/barbearia-painel.apk"
   NOME="Painel Barbearia"
 else

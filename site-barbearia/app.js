@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.59',
+  APP_VERSION: '1.0.60',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.59',
+    versao: '1.0.60',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -843,7 +843,7 @@ async function checarAtualizacao({ silencioso = true } = {}) {
   try {
     const rel = await buscarUltimaVersao();
     if (!rel || !rel.tag_name) {
-      if (!silencioso) mostrarAvisoUpdate(mensagemSemConexao());
+      if (!silencioso) { toast('Buscando... não encontrei atualização.'); mostrarAvisoUpdate(mensagemSemConexao()); }
       return null;
     }
     const nova = String(rel.tag_name).replace(/^v/i, '');
@@ -859,7 +859,7 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     } else if (forcar) {
       // ja viu essa versao forcada? (so reaparece se vier OUTRA versao forcada)
       if (localStorage.getItem(LS_UPDATE_VISTO) === nova) return null;
-    } else if (!versaoEhMaior(nova, CONFIG.APP_VERSION)) return null;
+    } else if (!versaoEhMaior(nova, CONFIG.APP_VERSION)) { if (!silencioso) toast('Você já está na versão mais recente (' + CONFIG.APP_VERSION + ').'); return null; }
 
     const adiado = Number(localStorage.getItem(LS_UPDATE_PARA) || 0);
     // se for forçado, ignora o "Depois" — sempre aparece
@@ -868,11 +868,12 @@ async function checarAtualizacao({ silencioso = true } = {}) {
     // o normalizarRelease ja garante um asset com o endereco do APK
     const asset = (rel.assets || []).find((a) => /\.apk$/i.test(a.name || '')) || (rel.assets || [])[0];
     if (!asset) return null;
+    if (!silencioso) toast('Atualização ' + nova + ' encontrada!');
     mostrarAtualizacao(nova, rel, asset, forcar);
     return nova;
   } catch (e) {
     console.warn('[update] nao consegui checar:', e.message);
-    if (!silencioso) mostrarAvisoUpdate(mensagemSemConexao(e));
+    if (!silencioso) { toast('Erro ao checar: ' + (e && e.message ? e.message : 'sem internet')); mostrarAvisoUpdate(mensagemSemConexao(e)); }
     return null;
   }
 }
@@ -1316,6 +1317,7 @@ function ligarCanalCliente() {
   for (const base of canaisNtfy()) {
     try {
       const es = new EventSource(`${base}/${CONFIG.NTFY_TOPIC}/sse`);
+      es.onopen = () => { toast('Canal conectado ✅'); };
       es.onmessage = (ev) => { processarCanal(ev.data, { aoVivo: true }); };
       // se cair, o navegador reconecta sozinho
       sseLoja.push(es);
@@ -2335,11 +2337,44 @@ async function registrarPush() {
     });
     // quando uma notificacao chegar com o app aberto
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      toast(notification.title || 'Nova notificacao');
+      const titulo = (notification && notification.title) || 'Nova notificação';
+      const corpo = (notification && notification.body) || '';
+      toast(titulo + (corpo ? '\n' + corpo : ''));
     });
     // quando o usuario toca na notificacao
     PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
       const dados = (notification.notification && notification.notification.data) || {};
+      if (dados.tipo === 'pagamento') {
+        const id = dados.id;
+        const status = dados.status;
+        const atual = loadBookings().find((b) => b.id === id);
+        if (atual) {
+          if (status === 'confirmado' && atual.pixStatus !== 'pago') {
+            updateBooking(id, { pixStatus: 'pago', status: 'confirmado' });
+            if (pixBooking && pixBooking.id === id) {
+              pixBooking.pixStatus = 'pago';
+              pixBooking.status = 'confirmado';
+              pararTimerResetPix();
+              renderPixArea();
+            }
+            checkPixOnLoad();
+          } else if (status === 'recusado' && atual.pixStatus !== 'recusado') {
+            updateBooking(id, { pixStatus: 'recusado', status: 'cancelado' });
+            if (pixBooking && pixBooking.id === id) {
+              pixBooking = null;
+              pararTimerResetPix();
+              limparEstadoPagamento();
+            }
+          }
+          const nome = (atual.clientName || '').split(' ')[0] || 'Você';
+          if (status === 'confirmado') {
+            toast(`✅ ${nome}, seu agendamento foi confirmado!`);
+          } else if (status === 'recusado') {
+            toast(`❌ ${nome}, seu agendamento foi cancelado. Entre em contato com a barbearia.`);
+          }
+        }
+        return;
+      }
       if (dados.tipo !== 'atualizacao') return;
       // o push ja traz o endereco DIRETO do APK: abre o popup com esse link,
       // sem depender da API do GitHub (que as vezes bloqueia o celular)
