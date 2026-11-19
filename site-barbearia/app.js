@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.65',
+  APP_VERSION: '1.0.66',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.65',
+    versao: '1.0.66',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -2380,6 +2380,7 @@ async function registrarPush() {
         const id = dados.id;
         const status = dados.status;
         const atual = loadBookings().find((b) => b.id === id);
+        const nome = (atual && atual.clientName ? atual.clientName : (dados.nome || '')).split(' ')[0] || 'Você';
         if (atual) {
           if (status === 'confirmado' && atual.pixStatus !== 'pago') {
             updateBooking(id, { pixStatus: 'pago', status: 'confirmado' });
@@ -2398,14 +2399,25 @@ async function registrarPush() {
               limparEstadoPagamento();
             }
           }
-          const nome = (atual.clientName || '').split(' ')[0] || 'Você';
-          if (status === 'confirmado') {
-            toast(`✅ ${nome}, seu agendamento foi confirmado!`);
-          } else if (status === 'recusado') {
-            toast(`❌ ${nome}, seu agendamento foi cancelado. Entre em contato com a barbearia.`);
-          }
         }
-        return;
+        if (status === 'confirmado') {
+          toast('✅ ' + nome + ', seu agendamento foi confirmado!');
+          try { if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]); } catch { /* ignora */ }
+          try {
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              new Notification('Pagamento confirmado!', { body: nome + ', seu agendamento foi confirmado!', icon: '/icone-192.png' });
+            }
+          } catch (e) { /* ignora */ }
+        } else if (status === 'recusado') {
+          toast('❌ ' + nome + ', seu agendamento foi cancelado. Entre em contato com a barbearia.');
+          try { if (navigator.vibrate) navigator.vibrate([300, 100, 300]); } catch { /* ignora */ }
+          try {
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              new Notification('Agendamento cancelado', { body: nome + ', seu agendamento foi cancelado. Entre em contato com a barbearia.', icon: '/icone-192.png' });
+            }
+          } catch (e) { /* ignora */ }
+        }
+        return;        return;
       }
       if (dados.tipo !== 'atualizacao') return;
       // o push ja traz o endereco DIRETO do APK: abre o popup com esse link,
