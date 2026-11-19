@@ -163,10 +163,17 @@ function calcularAberto(st) {
   if (st.modo === 'manual') return st.aberto === true; // so true = aberto (null/undefined/false = fechado)
   const now = new Date();
   const mins = now.getHours() * 60 + now.getMinutes();
-  return mins >= minutosDe(st.abreAs) && mins <= minutosDe(st.fechaAs);
+  const abre = minutosDe(st.abreAs);
+  const fecha = minutosDe(st.fechaAs);
+  if (abre === null || fecha === null) return false;
+  return mins >= abre && mins <= fecha;
 }
 const minutosDe = (t) => {
-  const [h, m] = String(t || '09:00').split(':').map(Number);
+  const s = String(t || '').trim();
+  if (!s || s === 'null' || s === 'undefined') return null;
+  if (s === '00:00') return 24 * 60;
+  const [h, m] = s.split(':').map(Number);
+  if (isNaN(h)) return null;
   return (h || 0) * 60 + (m || 0);
 };
 const pinOk = (req) => {

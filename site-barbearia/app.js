@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.60',
+  APP_VERSION: '1.0.62',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.60',
+    versao: '1.0.62',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -1627,6 +1627,10 @@ function renderPixArea() {
 
   $('pixText2').textContent =
     `Sinal de ${BRL(signal)} — ${b.serviceName} · ${b.dateLabel} às ${b.time}`;
+  if (b.createdAt) {
+    const quando = new Date(b.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    $('pixText2').textContent += ` (agendado em ${quando})`;
+  }
   $('pixValor').textContent = BRL(signal);
 
   if (pago) {
@@ -2340,6 +2344,12 @@ async function registrarPush() {
       const titulo = (notification && notification.title) || 'Nova notificação';
       const corpo = (notification && notification.body) || '';
       toast(titulo + (corpo ? '\n' + corpo : ''));
+      // tenta mostrar notificacao do sistema tambem
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(titulo, { body: corpo, icon: '/icone-192.png' });
+        }
+      } catch (e) { /* ignora */ }
     });
     // quando o usuario toca na notificacao
     PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
@@ -2392,6 +2402,8 @@ async function registrarPush() {
       console.warn('[push] permissao de notificacao negada pelo Android');
       return;
     }
+    // tambem pede permissao para notificacoes web (fallback)
+    try { if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission(); } catch { /* ignora */ }
     await PushNotifications.register();
 
     // o servidor pode ter perdido a lista de tokens (deploy no Render):
