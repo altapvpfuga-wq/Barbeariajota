@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.62',
+  APP_VERSION: '1.0.64',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.62',
+    versao: '1.0.64',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -1261,9 +1261,15 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
           renderPixArea();
         }
         checkPixOnLoad();
-        const nome = (atual.clientName || '').split(' ')[0] || 'Você';
-        toast(`✅ ${nome}, seu agendamento foi confirmado!`);
-      }
+      // mostra a notificacao personalizada (mesmo se o agendamento nao estiver no localStorage)
+      const nome = (p.b.clientName || (atual && atual.clientName) || '').split(' ')[0] || 'Você';
+      toast('✅ ' + nome + ', seu agendamento foi confirmado!');
+      // tenta mostrar notificacao do sistema tambem
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('Pagamento confirmado!', { body: nome + ', seu agendamento foi confirmado!', icon: '/icone-192.png' });
+        }
+      } catch (e) { /* ignora */ }
     } else if (p && p.t === 'r' && p.b && p.b.id) {
       // a barbearia RECUSOU o pagamento: cancela o agendamento
       const atual = loadBookings().find((b) => b.id === p.b.id);
@@ -1274,10 +1280,16 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
           pararTimerResetPix();
           limparEstadoPagamento();
         }
-        const nome = (atual.clientName || '').split(' ')[0] || 'Você';
-        toast(`❌ ${nome}, seu agendamento foi cancelado. Entre em contato com a barbearia.`);
       }
-    }
+      const nome = (p.b.clientName || (atual && atual.clientName) || '').split(' ')[0] || 'Você';
+      toast('❌ ' + nome + ', seu agendamento foi cancelado. Entre em contato com a barbearia.');
+      // tenta mostrar notificacao do sistema tambem
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('Agendamento cancelado', { body: nome + ', seu agendamento foi cancelado. Entre em contato com a barbearia.', icon: '/icone-192.png' });
+        }
+      } catch (e) { /* ignora */ }
+    }    }
   }
 
   // STATUS: ao vivo aplica cada um (chegam em ordem);
