@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.64',
+  APP_VERSION: '1.0.65',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.64',
+    versao: '1.0.65',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -251,9 +251,17 @@ function openWhatsApp(booking) {
 
 // ===== ui helpers =====
 function toast(msg) {
-  const t = $('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2800);
+  let t = $('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--gold);color:#111;font-weight:800;padding:16px 24px;border-radius:14px;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,.45);max-width:90vw;text-align:center;white-space:pre-line;font-size:16px';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.display = 'none'; }, 8000);
 }
 
 // a rolagem animada só funciona com a aba visível
@@ -1264,6 +1272,8 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
       // mostra a notificacao personalizada (mesmo se o agendamento nao estiver no localStorage)
       const nome = (p.b.clientName || (atual && atual.clientName) || '').split(' ')[0] || 'Você';
       toast('✅ ' + nome + ', seu agendamento foi confirmado!');
+      // vibracao
+      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]); } catch { /* ignora */ }
       // tenta mostrar notificacao do sistema tambem
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -1283,6 +1293,8 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
       }
       const nome = (p.b.clientName || (atual && atual.clientName) || '').split(' ')[0] || 'Você';
       toast('❌ ' + nome + ', seu agendamento foi cancelado. Entre em contato com a barbearia.');
+      // vibracao
+      try { if (navigator.vibrate) navigator.vibrate([300, 100, 300]); } catch { /* ignora */ }
       // tenta mostrar notificacao do sistema tambem
       try {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
