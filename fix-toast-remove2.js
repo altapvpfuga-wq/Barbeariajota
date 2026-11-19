@@ -1,0 +1,10 @@
+const fs = require('fs');
+let s = fs.readFileSync('site-barbearia/app.js', 'utf8');
+s = s.replace(/\r\n/g, '\n');
+s = s.replace("      toast(`Horário ${el.dataset.t} selecionado.`);\n", '');
+s = s.replace(/\n/g, '\r\n');
+fs.writeFileSync('site-barbearia/app.js', s);
+console.log('done');
+const s2 = fs.readFileSync('site-barbearia/app.js', 'utf8');
+const m = s2.match(/toast\(`Horário/g);
+console.log('remaining:', m ? m.length : 0);

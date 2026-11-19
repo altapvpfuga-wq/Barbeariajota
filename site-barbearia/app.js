@@ -1317,7 +1317,7 @@ function ligarCanalCliente() {
   for (const base of canaisNtfy()) {
     try {
       const es = new EventSource(`${base}/${CONFIG.NTFY_TOPIC}/sse`);
-      es.onopen = () => { toast('Canal conectado ✅'); };
+      es.onopen = () => { /* canal conectado */ };
       es.onmessage = (ev) => { processarCanal(ev.data, { aoVivo: true }); };
       // se cair, o navegador reconecta sozinho
       sseLoja.push(es);
@@ -2064,7 +2064,6 @@ async function renderToday() {
       showStep(3);
       renderTimes();
       renderResume();
-      toast(`Horário ${el.dataset.t} selecionado.`);
     }));
     return;
   }
@@ -2112,7 +2111,6 @@ async function renderToday() {
     showStep(3);
     renderTimes();
     renderResume();
-    toast(`Horário ${el.dataset.t} selecionado.`);
   }));
 }
 document.querySelectorAll('.payopt').forEach((el) =>
