@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.66',
+  APP_VERSION: '1.0.67',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.66',
+    versao: '1.0.67',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -2453,7 +2453,6 @@ async function registrarPush() {
 window.addEventListener('load', () => {
   window.scrollTo(0, 0);
   ajustarTarjaDoTopo();
-  toast('Versão ' + CONFIG.APP_VERSION + ' carregada');
   // botões "Reservar horário" / "Agendar agora" descem SUAVE até a etapa do corte
   document.querySelectorAll('a[href="#servicos"]').forEach((a) => {
     a.addEventListener('click', (e) => {
