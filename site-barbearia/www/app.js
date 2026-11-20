@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.67',
+  APP_VERSION: '1.0.68',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.67',
+    versao: '1.0.68',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -1660,14 +1660,17 @@ function renderPixArea() {
   if (pago) {
     pararConferencia();
     $('pixGerando').classList.add('hidden');
-    $('pixPronto').classList.remove('hidden');
+    $('pixPronto').classList.add('hidden');
     $('pixOffline').classList.add('hidden');
-    $('pixEspera').innerHTML = '✅ <b>Pix pago confirmado pela barbearia</b>';
+    $('pixEspera').classList.add('hidden');
     $('btnPagarAgora').classList.add('hidden');
     if ($('btnJaPaguei')) {
       $('btnJaPaguei').classList.add('hidden');
     }
-    $('pixCode').value = 'PIX PAGO';
+    $('pixCode').value = '';
+    $('pixResultado').classList.add('hidden');
+    $('btnWppFinal').classList.add('hidden');
+    $('pixQrBox').innerHTML = '';
   } else {
     // modo manual: QR + chave + copia e cola; botao "Ja paguei" habilitado
     if ($('btnJaPaguei')) {
@@ -1687,15 +1690,13 @@ function renderPixArea() {
   }
 
   const res = $('pixResultado');
-  res.classList.remove('hidden');
-  res.classList.toggle('pagavel', !pago);
-  $('btnWppFinal').classList.toggle('hidden', !pago);
-
   if (pago) {
-    $('pixResultadoTexto').textContent =
-      'Pagamento confirmado! Agora envie seu agendamento no WhatsApp para a barbearia reservar sua vaga.';
-    showFloatWpp(b);
+    res.classList.add('hidden');
+    $('btnWppFinal').classList.add('hidden');
   } else {
+    res.classList.remove('hidden');
+    res.classList.add('pagavel');
+    $('btnWppFinal').classList.add('hidden');
     $('pixResultadoTexto').textContent =
       'Assim que o Pix cair, esta tela muda sozinha e o botão do WhatsApp aparece.';
   }
@@ -1828,11 +1829,8 @@ function mostrarPixManual() {
   $('pixEspera').innerHTML = '⏳ <b>Aguardando você pagar e avisar a barbearia.</b><br>Pague pelo QR Code ou copie o código, depois toque em "Já paguei o Pix".';
 
   const res = $('pixResultado');
-  res.classList.remove('hidden');
-  res.classList.add('pagavel');
+  res.classList.add('hidden');
   $('btnWppFinal').classList.add('hidden');
-  $('pixResultadoTexto').textContent =
-    'Pague o sinal de ' + BRL(CONFIG.SIGNAL_VALUE) + ' e toque em "Já paguei o Pix" para avisar a barbearia no WhatsApp.';
 
   if ($('btnJaPaguei')) {
     $('btnJaPaguei').disabled = false;

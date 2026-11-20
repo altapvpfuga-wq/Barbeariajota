@@ -1,12 +1,12 @@
 {
   "cliente": {
-    "versao": "1.0.67",
-    "url": "https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.67/Barbearia-do-Jota-v1.0.67.apk",
-    "notas": "Nova versão com notificação de pagamento confirmado/cancelado por aparelho."
+    "versao": "1.0.68",
+    "url": "https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.68/Barbearia-do-Jota-v1.0.68.apk",
+    "notas": "Nova versão sem telas verdes de pagamento."
   },
   "painel": {
-    "versao": "1.0.67",
-    "url": "https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.67/Painel-v1.0.67.apk",
-    "notas": "Nova versão com notificação de pagamento confirmado/cancelado por aparelho."
+    "versao": "1.0.68",
+    "url": "https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.68/Painel-v1.0.68.apk",
+    "notas": "Nova versão sem telas verdes de pagamento."
   }
 }
