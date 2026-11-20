@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.69',
+  APP_VERSION: '1.0.70',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.69',
+    versao: '1.0.70',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -1717,7 +1717,6 @@ function renderAmbiguo(aviso) {
   $('pixResultadoTexto').textContent =
     (aviso || 'Este link de pagamento já estava marcado como pago.')
     + ' Fale com a barbearia pelo WhatsApp para confirmar o seu sinal.';
-  showFloatWpp(pixBooking);
 }
 
 // ---------- link de pagamento pronto ----------
@@ -1904,14 +1903,9 @@ function limparEstadoPagamento() {
 
 // Botão flutuante que reaparece quando o cliente volta ao site
 function showFloatWpp(b) {
+  // desativado: pagamento e confirmado pelo painel, nao pelo app
   const f = $('pixFloat');
-  if (!f || !b) return;
-  // so mostra se o WhatsApp ainda nao foi enviado
-  if (b.wppEnviado) return;
-  pixBooking = b;
-  $('pixFloatText').textContent =
-    `Pagamento de ${BRL(signalOf(b.price))} confirmado! Envie seu agendamento no WhatsApp para garantir a vaga.`;
-  f.classList.add('show');
+  if (f) f.classList.remove('show');
 }
 
 // Cliente não pagou ainda
