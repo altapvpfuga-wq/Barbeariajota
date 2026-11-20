@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.70',
+  APP_VERSION: '1.0.71',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.70',
+    versao: '1.0.71',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -1256,6 +1256,13 @@ async function processarCanal(texto, { aoVivo = false } = {}) {
       if (atual) {
         renderAll();
         toast('🗑️ Sua reserva foi cancelada pela barbearia. Fale no WhatsApp se tiver dúvida.');
+        // tenta mostrar notificacao do sistema tambem
+        try {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification('Reserva cancelada', { body: 'Sua reserva foi cancelada pela barbearia. Fale no WhatsApp se tiver dúvida.', icon: '/icone-192.png' });
+          }
+        } catch (e) { /* ignora */ }
+        try { if (navigator.vibrate) navigator.vibrate([300, 100, 300]); } catch { /* ignora */ }
       }
     } else if (p && p.t === 'p' && p.b && p.b.id && p.b.pixStatus === 'pago') {
       // a barbearia (ou o PC) confirmou o Pix: marca pago e libera o WhatsApp
