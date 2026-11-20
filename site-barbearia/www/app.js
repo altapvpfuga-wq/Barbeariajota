@@ -1,7 +1,7 @@
 // ===== CONFIG CENTRAL — edite aqui =====
 const CONFIG = {
   // Versão do aplicativo. Aumente este número toda vez que publicar um APK novo.
-  APP_VERSION: '1.0.68',
+  APP_VERSION: '1.0.69',
 
   // Repositório do GitHub onde os APK são publicados.
   // Precisa ser PUBLICO, senão o aplicativo não consegue ler as versões.
@@ -16,7 +16,7 @@ const CONFIG = {
   //   4) este link direto (sempre funciona e NAO abre o Chrome)
   // Ao publicar uma versao nova no GitHub Releases, o app detecta automaticamente.
   UPDATE_FALLBACK: {
-    versao: '1.0.68',
+    versao: '1.0.69',
     url: 'https://github.com/altapvpfuga-wq/Barbeariajota/releases/download/v1.0.57/Barbearia-do-Jota-v1.0.57.apk',
     notas: '[FORCAR] Correção da atualização e das notificações.',
   },
@@ -1671,6 +1671,9 @@ function renderPixArea() {
     $('pixResultado').classList.add('hidden');
     $('btnWppFinal').classList.add('hidden');
     $('pixQrBox').innerHTML = '';
+    // esconde o botao flutuante de WhatsApp (pagamento confirmado pelo painel)
+    const pf = $('pixFloat');
+    if (pf) pf.classList.remove('show');
   } else {
     // modo manual: QR + chave + copia e cola; botao "Ja paguei" habilitado
     if ($('btnJaPaguei')) {
@@ -1920,11 +1923,8 @@ function clientNotPaid() {
 // ===== quando volta ao site: reconfere o pagamento pendente =====
 // Só libera o WhatsApp depois que a InfinitePay confirmar. Nunca sozinho.
 function checkPixOnLoad() {
-  const list = loadBookings();
-  // so mostra o botao flutuante se houver pagamento CONFIRMADO
-  const pago = list.find((b) => b.payMethod === 'pix' && b.pixStatus === 'pago');
-  if (pago) { showFloatWpp(pago); return; }
   // nao navega para a etapa 5 — o usuario comeca do zero
+  // (o pagamento e confirmado pelo painel, nao pelo app)
 }
 
 // ===== GALERIA DE FOTOS (carrossel) =====
